@@ -1,16 +1,24 @@
 from src.database.base import Base
-from src.database.models import (Customer, MaintenanceRecord, Machine, Order, OrderItem, Product, Role, Shipment, SupportTicket, User)
+from src.database.models import (Customer, Machine, MaintenanceRecord, Order, OrderItem, Product, Role, Shipment, SupportTicket, User)
 from src.database.session import engine
+from src.logging.logger import configure_logging, logger
 
-def init_database() -> None:
-    """Create all database tables."""
+def main() -> None:
+    configure_logging()
 
-    print("Creating database tables...")
+    logger.info("Initializing database")
 
-    Base.metadata.create_all(bind=engine)
+    try:
+        Base.metadata.create_all(bind=engine)
 
-    print("Database tables created successfully.")
+        logger.info(
+            "Database initialized successfully",
+            table_count=len(Base.metadata.tables),
+        )
+    except Exception:
+        logger.exception("Database initialization failed")
+        raise
 
 
 if __name__ == "__main__":
-    init_database()
+    main()
