@@ -11,11 +11,6 @@ def create_embeddings() -> OpenAIEmbeddings:
         logger.error("OpenAI API key is not configured")
         raise RuntimeError("OPENAI_API_KEY environment variable is not set.")
 
-    logger.info(
-        "Initializing embedding model",
-        model="text-embedding-3-small"
-    )
+    logger.info("Initializing embedding model", model="text-embedding-3-small")
 
-    return OpenAIEmbeddings(
-        model="text-embedding-3-small"
-    )
+    return OpenAIEmbeddings(model="text-embedding-3-small")

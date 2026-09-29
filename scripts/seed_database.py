@@ -544,8 +544,7 @@ def main() -> None:
         
                 db.commit()      
 
-                logger.info(
-                    "Database seeded successfully",
+                logger.info("Database seeded successfully",
                     roles_created=len(roles),
                     customers_created=len(customers),
                     products_created=len(products),

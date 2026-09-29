@@ -11,10 +11,7 @@ def main() -> None:
     try:
         Base.metadata.create_all(bind=engine)
 
-        logger.info(
-            "Database initialized successfully",
-            table_count=len(Base.metadata.tables),
-        )
+        logger.info("Database initialized successfully", table_count=len(Base.metadata.tables))
     except Exception:
         logger.exception("Database initialization failed")
         raise
