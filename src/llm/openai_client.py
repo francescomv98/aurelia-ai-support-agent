@@ -1,0 +1,18 @@
+import os
+from langchain_openai import ChatOpenAI
+from src.logging.logger import logger
+
+def create_chat_model() -> ChatOpenAI:
+    """Create the OpenAI chat model."""
+
+    api_key = os.getenv("OPENAI_API_KEY")
+
+    if not api_key:
+        logger.error("OpenAI API key is not configured")
+        raise RuntimeError("OPENAI_API_KEY environment variable is not set.")
+
+    model_name = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+
+    logger.info("Initializing chat model", model=model_name)
+
+    return ChatOpenAI(model=model_name, temperature=0)
