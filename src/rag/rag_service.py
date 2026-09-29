@@ -1,0 +1,56 @@
+from langchain_core.documents import Document
+from src.logging.logger import logger
+from src.rag.retriever import Retriever
+
+class RAGService:
+    """Handle document retrieval and context preparation."""
+
+    def __init__(self, retriever: Retriever) -> None:
+        self.retriever = retriever
+
+        logger.info("RAG service initialized")
+
+    def retrieve_context(self, query: str) -> list[Document]:
+        """Retrieve relevant documents for a query."""
+
+        if not query.strip():
+            logger.warning("Empty RAG query")
+            return []
+
+        logger.info("Retrieving context for RAG query")
+
+        try:
+            documents = self.retriever.retrieve(query)
+
+            logger.info("RAG context retrieved", document_count=len(documents))
+
+            return documents
+
+        except Exception:
+            logger.exception("Failed to retrieve RAG context")
+            raise
+
+    def build_context(self, documents: list[Document]) -> str:
+        """Build a textual context from retrieved documents."""
+
+        if not documents:
+            logger.warning("No documents available to build RAG context")
+            return ""
+
+        context_parts: list[str] = []
+
+        for document in documents:
+            source = document.metadata.get("source", "unknown")
+            page = document.metadata.get("page", "unknown")
+            category = document.metadata.get("category", "unknown")
+
+            context_parts.append(
+                f"[Source: {source} | Page: {page} | Category: {category}]\n"
+                f"{document.page_content}"
+            )
+
+        context = "\n\n".join(context_parts)
+
+        logger.info("RAG context built", document_count=len(documents), context_length=len(context))
+
+        return context
