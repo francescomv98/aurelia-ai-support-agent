@@ -10,6 +10,8 @@ from src.tools.machine_tools import get_machine_tool
 from src.tools.order_tools import get_order_status_tool
 from src.services.maintenance_service import calculate_maintenance_status
 from src.tools.ticket_tools import get_machine_ticket_tool
+from src.auth.models import AuthenticatedUser
+from src.database.models import UserRole
 
 def retrieve_context(state: AgentState, rag_service: RAGService) -> AgentState:
     """Retrieve relevant documentation for the user query."""
@@ -46,13 +48,7 @@ def execute_tool(state: AgentState, db: Session, rag_service: RAGService) -> Age
     """Execute the enterprise tool selected for the request."""
     logger.info("Executing agent tool", tool_type=state["tool_type"])
 
-    if state["customer_id"] is None:
-        logger.warning("Tool execution rejected: missing customer context")
-
-        return {
-            **state,
-            "tool_result": ("Customer context is required to access enterprise information.")
-        }
+    user = state["authenticated_user"]
 
     query = state["user_query"]
 
@@ -70,7 +66,7 @@ def execute_tool(state: AgentState, db: Session, rag_service: RAGService) -> Age
                 "tool_result": ("I could not identify an order number.")
             }
 
-        result = get_order_status_tool(db=db, order_id=order_id, customer_id=state["customer_id"])
+        result = get_order_status_tool(db=db, order_id=order_id, user=user)
 
         return {
             **state,
@@ -93,7 +89,7 @@ def execute_tool(state: AgentState, db: Session, rag_service: RAGService) -> Age
                 "tool_result": "I could not identify a machine serial number."
             }
 
-        machine_result = get_machine_tool(db=db, machine_serial=machine_serial, customer_id=state["customer_id"])
+        machine_result = get_machine_tool(db=db, machine_serial=machine_serial, user=user)
 
         if machine_result.status == "NOT_FOUND":
             return {
@@ -119,7 +115,7 @@ def execute_tool(state: AgentState, db: Session, rag_service: RAGService) -> Age
         is_ticket_request = any(keyword in query_lower for keyword in ticket_keywords)
 
         if is_ticket_request:
-            ticket_result = get_machine_ticket_tool(db=db, machine_serial=machine_serial, customer_id=state["customer_id"])
+            ticket_result = get_machine_ticket_tool(db=db, machine_serial=machine_serial, user=user)
 
             return {
                 **state,

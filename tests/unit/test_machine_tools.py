@@ -1,7 +1,11 @@
+from src.auth.models import AuthenticatedUser
+from src.database.models import UserRole
 from src.services.machine_service import MachineResult
 from src.tools.machine_tools import get_machine_tool
 
 def test_get_machine_tool(monkeypatch) -> None:
+    user = AuthenticatedUser(user_id=1, customer_id=1, role=UserRole.CUSTOMER)
+
     def fake_get_machine(db, machine_serial: str, customer_id: int) -> MachineResult:
         assert machine_serial == "AIS2-2025-00142"
         assert customer_id == 1
@@ -19,7 +23,7 @@ def test_get_machine_tool(monkeypatch) -> None:
 
     monkeypatch.setattr("src.tools.machine_tools.get_machine", fake_get_machine)
 
-    result = get_machine_tool(db=object(), machine_serial="AIS2-2025-00142", customer_id=1)
+    result = get_machine_tool(db=object(), machine_serial="AIS2-2025-00142", user=user)
 
     assert isinstance(result, MachineResult)
     assert result.status == "FOUND"
