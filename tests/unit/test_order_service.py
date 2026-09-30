@@ -1,31 +1,34 @@
-from types import SimpleNamespace
-from src.services.order_service import get_order_status
+from src.services.order_service import OrderResult, get_order_status
 
 class FakeSession:
-    """Fake SQLAlchemy session for order service tests."""
-
-    def __init__(self, order=None) -> None:
+    def __init__(self, order=None):
         self.order = order
 
     def scalar(self, statement):
         return self.order
 
 
-def test_get_order_status() -> None:
-    order = SimpleNamespace(order_number="ORD-10245", customer_id=1, status="SHIPPED")
+class FakeOrder:
+    status = "SHIPPED"
 
-    db = FakeSession(order)
+
+def test_get_order_status_returns_order() -> None:
+    db = FakeSession(FakeOrder())
 
     result = get_order_status(db=db, order_id="ORD-10245", customer_id=1)
 
-    assert result["status"] == "SHIPPED"
-    assert "ORD-10245" in result["message"]
+    assert isinstance(result, OrderResult)
+    assert result.status == "FOUND"
+    assert result.order_status == "SHIPPED"
+    assert result.message == "Order ORD-10245 is SHIPPED."
 
 
-def test_get_order_status_not_found() -> None:
-    db = FakeSession(None)
+def test_get_order_status_returns_not_found() -> None:
+    db = FakeSession()
 
-    result = get_order_status(db=db, order_id="ORD-99999", customer_id=1)
+    result = get_order_status(db=db, order_id="ORD-10245", customer_id=1)
 
-    assert result["status"] == "NOT_FOUND"
-    assert result["message"] == "Order not found."
+    assert isinstance(result, OrderResult)
+    assert result.status == "NOT_FOUND"
+    assert result.order_status is None
+    assert result.message == "Order not found."
