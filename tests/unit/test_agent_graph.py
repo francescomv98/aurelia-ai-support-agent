@@ -1,90 +1,53 @@
-from langchain_core.documents import Document
+from src.agent.graph import execute_tool
 
-from src.agent.graph import build_agent_graph
+def test_execute_tool_returns_order_result(monkeypatch) -> None:
+    def fake_get_order_status_tool(db, order_id: str, customer_id: int) -> str:
+        assert order_id == "ORD-10245"
+        assert customer_id == 1
 
+        return "Order ORD-10245 is SHIPPED."
 
-class FakeRAGService:
-    """Fake RAG service for agent graph tests."""
+    monkeypatch.setattr("src.agent.graph.get_order_status_tool", fake_get_order_status_tool)
 
-    def retrieve_context(self, query: str) -> list[Document]:
-        return [
-            Document(
-                page_content=(
-                    "AIS-200 maximum production speed is "
-                    "80 units per minute."
-                ),
-                metadata={
-                    "source": "AIS-200_technical_specifications.pdf",
-                    "page": 3,
-                    "category": "technical",
-                },
-            )
-        ]
+    state = {
+        "user_query": "What is the status of order ORD-10245?",
+        "customer_id": 1,
+        "route": "tool",
+        "retrieved_context": "",
+        "tool_result": "",
+        "response": ""
+    }
 
-    def build_context(self, documents: list[Document]) -> str:
-        return "\n\n".join(
-            document.page_content
-            for document in documents
-        )
+    result = execute_tool(state=state, db=object())
+
+    assert result["tool_result"] == "Order ORD-10245 is SHIPPED."
 
 
-class FakeChatModel:
-    """Fake chat model for agent graph tests."""
+def test_execute_tool_requires_customer_context() -> None:
+    state = {
+        "user_query": "What is the status of order ORD-10245?",
+        "customer_id": None,
+        "route": "tool",
+        "retrieved_context": "",
+        "tool_result": "",
+        "response": ""
+    }
 
-    def with_structured_output(self, schema):
-        return FakeStructuredModel()
+    result = execute_tool(state=state, db=object())
 
-    def invoke(self, prompt: str):
-        class FakeResponse:
-            content = "The AIS-200 has a maximum speed of 80 units per minute."
-
-        return FakeResponse()
-
-
-class FakeStructuredModel:
-    """Fake structured output model."""
-
-    def invoke(self, prompt: str):
-        class FakeDecision:
-            route = "rag"
-
-        return FakeDecision()
+    assert (result["tool_result"] == "Customer context is required to access order information.")
 
 
-def test_agent_graph_retrieves_context() -> None:
-    graph = build_agent_graph(
-        rag_service=FakeRAGService(),
-        chat_model=FakeChatModel(),
-    )
+def test_execute_tool_handles_missing_order_id() -> None:
+    state = {
+        "user_query": "Can you check my order?",
+        "customer_id": 1,
+        "route": "tool",
+        "retrieved_context": "",
+        "tool_result": "",
+        "response": ""
+    }
 
-    result = graph.invoke(
-        {
-            "user_query": "What is the maximum speed of AIS-200?",
-            "route": "rag",
-            "retrieved_context": "",
-            "response": "",
-        }
-    )
+    result = execute_tool(state=state, db=object())
 
-    assert result["route"] == "rag"
-    assert "80 units per minute" in result["retrieved_context"]
-
-
-def test_agent_graph_generates_response() -> None:
-    graph = build_agent_graph(
-        rag_service=FakeRAGService(),
-        chat_model=FakeChatModel(),
-    )
-
-    result = graph.invoke(
-        {
-            "user_query": "What is the maximum speed of AIS-200?",
-            "route": "rag",
-            "retrieved_context": "",
-            "response": "",
-        }
-    )
-
-    assert result["response"] == (
-        "The AIS-200 has a maximum speed of 80 units per minute."
-    )
+    assert (result["tool_result"] == "I could not identify an order number in the request.")
