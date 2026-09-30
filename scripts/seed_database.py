@@ -1,3 +1,6 @@
+import os
+from sqlalchemy import select
+from src.auth.password import hash_password
 from src.logging.logger import configure_logging, logger
 from datetime import datetime
 from decimal import Decimal
@@ -288,12 +291,11 @@ def main() -> None:
                 # Users
                 # ------------------------------------------------------------------
         
-                # Demo password hashes generated from the same development password.
-                # Authentication implementation will be added later.
-                demo_password_hash = (
-                    "DEMO_HASH_PLACEHOLDER"
-                )
-        
+                # Development-only password used to generate hashes for seeded users.
+                # Never use this default password in production.
+                demo_password = os.getenv("AURELIA_DEMO_PASSWORD", "AureliaDemo123!")
+                demo_password_hash = hash_password(demo_password)
+
                 users = [
                     User(
                         username="alfa.support",
@@ -341,8 +343,20 @@ def main() -> None:
                         role=roles["ADMIN"]
                     )
                 ]
-        
-                db.add_all(users)
+
+                for user in users:
+                    existing_user = db.scalar(select(User).where(User.username == user.username))
+
+                    if existing_user is None:
+                        db.add(user)
+                        logger.info("Seeded user", username=user.username, role=user.role.name)
+                    else:
+                        existing_user.password_hash = user.password_hash
+                        existing_user.role_id = user.role_id
+                        existing_user.customer_id = user.customer_id
+                        existing_user.is_active = user.is_active
+
+                        logger.info("Updated seeded user", username=existing_user.username, role=existing_user.role.name)
         
                 # ------------------------------------------------------------------
                 # Orders
@@ -559,3 +573,6 @@ def main() -> None:
         raise
     finally:
         db.close()
+
+if __name__ == "__main__":
+    main()
