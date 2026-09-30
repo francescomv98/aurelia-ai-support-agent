@@ -7,5 +7,6 @@ class AgentState(TypedDict):
     customer_id: int | None
     route: Literal["rag", "tool", "hybrid"]
     retrieved_context: str
+    tool_type: Literal["order", "machine"] | None
     tool_result: str
     response: str

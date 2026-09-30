@@ -7,6 +7,7 @@ from src.agent.state import AgentState
 from src.logging.logger import logger
 from src.rag.rag_service import RAGService
 from src.tools.order_tools import get_order_status_tool
+from src.tools.machine_tools import get_machine_tool
 
 def retrieve_context(state: AgentState, rag_service: RAGService) -> AgentState:
     """Retrieve relevant documentation for the user query."""
@@ -21,42 +22,73 @@ def retrieve_context(state: AgentState, rag_service: RAGService) -> AgentState:
 
 
 def execute_tool(state: AgentState, db: Session) -> AgentState:
-    """Execute the enterprise tool selected by the agent."""
-    logger.info("Executing agent tool", route=state["route"])
-
-    query = state["user_query"]
-
-    order_id = None
-
-    words = query.split()
-
-    for word in words:
-        if word.startswith("ORD-"):
-            order_id = word.strip(".,!?")
-
-            break
-
-    if order_id is None:
-        logger.info("No order identifier found in tool request")
-
-        return {
-            **state,
-            "tool_result": "I could not identify an order number in the request."
-        }
+    """Execute the enterprise tool selected for the request."""
+    logger.info("Executing agent tool", tool_type=state["tool_type"])
 
     if state["customer_id"] is None:
         logger.warning("Tool execution rejected: missing customer context")
 
         return {
             **state,
-            "tool_result": "Customer context is required to access order information."
+            "tool_result": (
+                "Customer context is required to access "
+                "enterprise information."
+            )
         }
 
-    result = get_order_status_tool(db=db, order_id=order_id, customer_id=state["customer_id"])
+    query = state["user_query"]
+
+    if state["tool_type"] == "order":
+        order_id = None
+
+        for word in query.split():
+            if word.upper().startswith("ORD-"):
+                order_id = word.strip(".,!?")
+                break
+
+        if order_id is None:
+            return {
+                **state,
+                "tool_result": "I could not identify an order number."
+            }
+
+        result = get_order_status_tool(db=db, order_id=order_id, customer_id=state["customer_id"])
+
+        return {
+            **state,
+            "tool_result": result
+        }
+
+    if state["tool_type"] == "machine":
+        machine_serial = None
+
+        for word in query.split():
+            normalized_word = word.strip(".,!?").upper()
+
+            if normalized_word.startswith(("AIS1-", "AIS2-", "AIS5-")):
+                machine_serial = normalized_word
+                break
+
+        if machine_serial is None:
+            return {
+                **state,
+                "tool_result": (
+                    "I could not identify a machine serial number."
+                )
+            }
+
+        result = get_machine_tool(db=db, machine_serial=machine_serial, customer_id=state["customer_id"])
+
+        return {
+            **state,
+            "tool_result": result
+        }
+
+    logger.warning("No enterprise tool selected")
 
     return {
         **state,
-        "tool_result": result
+        "tool_result": "No suitable enterprise tool was identified."
     }
 
 
@@ -105,23 +137,40 @@ def build_agent_graph(chat_model: ChatOpenAI, rag_service: RAGService, db: Sessi
 
     graph = StateGraph(AgentState)
 
-    graph.add_node("route_request", lambda state: route_request(state, chat_model))
-    graph.add_node("retrieve_context", lambda state: retrieve_context(state, rag_service))
+    graph.add_node("determine_tool_type", determine_tool_type)
     graph.add_node("execute_tool", lambda state: execute_tool(state, db))
-    graph.add_node("generate_response", lambda state: generate_response(state, chat_model))
 
-    graph.add_edge(START, "route_request")
+    graph.add_edge("retrieve_context", "determine_tool_type")
+    graph.add_edge("determine_tool_type", "execute_tool")
+    graph.add_edge("execute_tool", "generate_response")
+
     graph.add_conditional_edges(
         "route_request",
         lambda state: state["route"],
         {
             "rag": "retrieve_context",
-            "hybrid": "retrieve_context",
-            "tool": "execute_tool"
+            "tool": "determine_tool_type",
+            "hybrid": "retrieve_context"
         }
     )
-    graph.add_edge("retrieve_context", "generate_response")
-    graph.add_edge("execute_tool", "generate_response")
-    graph.add_edge("generate_response", END)
 
     return graph.compile()
+
+
+def determine_tool_type(state: AgentState) -> AgentState:
+    """Determine which enterprise tool is required."""
+    query = state["user_query"].upper()
+
+    if "ORD-" in query:
+        tool_type = "order"
+    elif "AIS1-" in query or "AIS2-" in query or "AIS5-" in query:
+        tool_type = "machine"
+    else:
+        tool_type = None
+
+    logger.info("Enterprise tool type determined", tool_type=tool_type)
+
+    return {
+        **state,
+        "tool_type": tool_type
+    }
