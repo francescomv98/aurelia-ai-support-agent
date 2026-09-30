@@ -1,6 +1,7 @@
 from langchain_core.documents import Document
 from src.logging.logger import logger
 from src.rag.retriever import Retriever
+import re
 
 class RAGService:
     """Handle document retrieval and context preparation."""
@@ -29,6 +30,27 @@ class RAGService:
         except Exception:
             logger.exception("Failed to retrieve RAG context")
             raise
+
+
+    def extract_maintenance_interval(self, documents: list[Document], model: str) -> int | None:
+        """Extract the maintenance interval for a machine model."""
+
+        pattern = rf"{re.escape(model)}.*?(\d[\d,]*)\s*(?:operating hours|hours)"
+
+        for document in documents:
+            match = re.search(pattern, document.page_content, flags=re.IGNORECASE | re.DOTALL)
+
+            if match:
+                interval = int(match.group(1).replace(",", ""))
+
+                logger.info("Maintenance interval extracted", model=model, maintenance_interval=interval)
+
+                return interval
+
+        logger.warning("Maintenance interval not found in RAG documents", model=model)
+
+        return None
+    
 
     def build_context(self, documents: list[Document]) -> str:
         """Build a textual context from retrieved documents."""

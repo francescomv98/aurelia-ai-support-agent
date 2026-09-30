@@ -1,6 +1,6 @@
 import pytest
 from sqlalchemy import select
-from src.database.models import Customer, Order
+from src.database.models import Customer
 from src.database.session import SessionLocal
 from src.services.order_service import get_order_status
 
@@ -13,7 +13,8 @@ def test_customer_can_access_own_order() -> None:
 
         result = get_order_status(db=db, order_id="ORD-10245", customer_id=customer.id)
 
-        assert result["status"] == "SHIPPED"
+        assert result.status == "FOUND"
+        assert result.order_status == "SHIPPED"
 
 
 @pytest.mark.integration
@@ -23,6 +24,7 @@ def test_customer_cannot_access_another_customer_order() -> None:
 
         assert customer is not None
 
-        result = get_order_status(db=db, order_id="ORD-10245", customer_id=customer.id)
+        result = get_order_status(db=db,  order_id="ORD-10245", customer_id=customer.id)
 
-        assert result["status"] == "NOT_FOUND"
+        assert result.status == "NOT_FOUND"
+        assert result.order_status is None

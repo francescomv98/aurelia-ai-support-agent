@@ -33,13 +33,13 @@ Available routes:
 
 - rag:
   Use when the answer can be obtained from Aurelia's documentation,
-  manuals, technical specifications, policies, FAQs, or maintenance
+  manuals, technical specifications, policies, FAQs or maintenance
   documentation.
 
 - tool:
   Use when the request requires customer-specific or operational data
   from enterprise systems, such as orders, shipments, machines,
-  maintenance records, or support tickets.
+  maintenance records or support tickets.
 
 - hybrid:
   Use when answering the request requires both enterprise data and
