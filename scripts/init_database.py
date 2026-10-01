@@ -1,5 +1,4 @@
 from src.database.base import Base
-from src.database.models import (Customer, Machine, MaintenanceRecord, Order, OrderItem, Product, Role, Shipment, SupportTicket, User)
 from src.database.session import engine
 from src.logging.logger import configure_logging, logger
 

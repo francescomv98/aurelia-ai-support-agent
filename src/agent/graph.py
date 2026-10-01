@@ -10,8 +10,6 @@ from src.tools.machine_tools import get_machine_tool
 from src.tools.order_tools import get_order_status_tool
 from src.services.maintenance_service import calculate_maintenance_status
 from src.tools.ticket_tools import get_machine_ticket_tool
-from src.auth.models import AuthenticatedUser
-from src.database.models import UserRole
 
 def retrieve_context(state: AgentState, rag_service: RAGService) -> AgentState:
     """Retrieve relevant documentation for the user query."""
@@ -257,7 +255,7 @@ def build_agent_graph(chat_model: ChatOpenAI, rag_service: RAGService, db: Sessi
             "determine_tool_type": "determine_tool_type"
         }
     )
-    
+
     graph.add_edge(START, "route_request")
     graph.add_edge("determine_tool_type", "execute_tool")
     graph.add_edge("execute_tool", "generate_response")
