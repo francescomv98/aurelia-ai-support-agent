@@ -9,6 +9,6 @@ class AgentState(TypedDict):
     authenticated_user: AuthenticatedUser
     route: Literal["rag", "tool", "hybrid"]
     retrieved_context: list[Document]
-    tool_type: Literal["order", "machine"] | None
+    tool_type: Literal["order", "machine", "shipment", "product", "customer"] | None
     tool_result: str
     response: str

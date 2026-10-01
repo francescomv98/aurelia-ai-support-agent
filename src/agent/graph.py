@@ -10,6 +10,12 @@ from src.tools.machine_tools import get_machine_tool
 from src.tools.order_tools import get_order_status_tool
 from src.services.maintenance_service import calculate_maintenance_status
 from src.tools.ticket_tools import get_machine_ticket_tool
+from src.tools.shipment_tools import get_shipment_tool
+from src.tools.product_tools import get_product_tool
+from src.tools.customer_tools import get_customer_tool
+import re
+from sqlalchemy import select
+from src.database.models import Customer
 
 def retrieve_context(state: AgentState, rag_service: RAGService) -> AgentState:
     """Retrieve relevant documentation for the user query."""
@@ -27,10 +33,19 @@ def determine_tool_type(state: AgentState) -> AgentState:
     """Determine which enterprise tool is required."""
     query = state["user_query"].upper()
 
+    product_match = re.search(r"\b(?:AIS-\d{3}|SP-[A-Z0-9-]+)\b", query.upper())
+    customer_match = re.search(r"\bCUST-\d+\b", query.upper())
+
     if "ORD-" in query:
         tool_type = "order"
+    elif "SHIP-" in query:
+        tool_type = "shipment"
     elif ("AIS1-" in query or "AIS2-" in query or "AIS5-" in query):
         tool_type = "machine"
+    elif product_match:
+        tool_type = "product"
+    elif customer_match:
+        tool_type = "customer"
     else:
         tool_type = None
 
@@ -160,6 +175,68 @@ def execute_tool(state: AgentState, db: Session, rag_service: RAGService) -> Age
         return {
             **state,
             "tool_result": tool_result
+        }
+
+    if state["tool_type"] == "shipment":
+        tracking_match = re.search(r"\bSHIP-\d+\b", state["user_query"].upper())
+
+        if not tracking_match:
+            logger.warning("Shipment tracking number not found in query")
+            return {
+                **state,
+                "tool_result": "Shipment tracking number not found."
+            }
+
+        tracking_number = tracking_match.group(0)
+
+        shipment_result = get_shipment_tool(db=db, tracking_number=tracking_number, user=state["authenticated_user"])
+
+        return {
+            **state,
+            "tool_result": shipment_result.message
+        }
+
+    if state["tool_type"] == "product":
+        product_match = re.search(r"\b(?:AIS-\d{3}|SP-[A-Z0-9-]+)\b", query.upper())
+
+        if not product_match:
+            return {
+                **state,
+                "tool_result": "I could not identify a product code."
+            }
+
+        product_code = product_match.group(0)
+
+        product_result = get_product_tool(db=db, product_code=product_code, user=user)
+
+        return {
+            **state,
+            "tool_result": product_result.message
+        }
+    
+    if state["tool_type"] == "customer":
+        customer_match = re.search(r"\bCUST-\d+\b", query.upper())
+
+        customer_id = None
+
+        if customer_match:
+            customer_code = customer_match.group(0)
+
+            customer = db.scalar(select(Customer).where(Customer.customer_code == customer_code))
+
+            if customer is None:
+                return {
+                    **state,
+                    "tool_result": "The requested customer was not found."
+                }
+
+            customer_id = customer.id
+
+        customer_result = get_customer_tool(db=db, user=user, customer_id=customer_id)
+
+        return {
+            **state,
+            "tool_result": customer_result.message
         }
 
     logger.warning("No enterprise tool selected")

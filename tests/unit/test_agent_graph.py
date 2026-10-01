@@ -4,7 +4,9 @@ from src.auth.models import AuthenticatedUser
 from src.database.models import UserRole
 from src.services.machine_service import MachineResult
 from src.services.ticket_service import TicketResult
+from src.services.shipment_service import ShipmentResult
 import pytest
+from unittest.mock import MagicMock
 
 def create_customer_user() -> AuthenticatedUser:
     return AuthenticatedUser(user_id=1, customer_id=1, role=UserRole.CUSTOMER)
@@ -245,3 +247,89 @@ def test_execute_tool_finds_existing_support_ticket(monkeypatch) -> None:
     assert "TCK-5021" in result["tool_result"]
     assert "IN_PROGRESS" in result["tool_result"]
     assert "P2" in result["tool_result"]
+
+
+def test_determine_shipment_tool_type() -> None:
+    state = {
+        "user_query": "Where is shipment SHIP-90231?",
+        "authenticated_user": AuthenticatedUser(
+            user_id=1,
+            customer_id=1,
+            role=UserRole.CUSTOMER
+        ),
+        "route": "tool",
+        "retrieved_context": [],
+        "tool_type": None,
+        "tool_result": "",
+        "response": ""
+    }
+
+    result = determine_tool_type(state)
+
+    assert result["tool_type"] == "shipment"
+
+
+def test_execute_shipment_tool() -> None:
+    db = MagicMock()
+
+    shipment_result = ShipmentResult(
+        status="FOUND",
+        tracking_number="SHIP-90231",
+        carrier="DHL",
+        shipment_status="IN_TRANSIT",
+        estimated_delivery=None,
+        message="Shipment SHIP-90231 is currently IN_TRANSIT. Carrier: DHL."
+    )
+
+    user = AuthenticatedUser(user_id=1, customer_id=1, role=UserRole.CUSTOMER)
+
+    state = {
+        "user_query": "Where is shipment SHIP-90231?",
+        "authenticated_user": user,
+        "route": "tool",
+        "retrieved_context": [],
+        "tool_type": "shipment",
+        "tool_result": "",
+        "response": ""
+    }
+
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setattr("src.agent.graph.get_shipment_tool", MagicMock(return_value=shipment_result))
+
+        result = execute_tool(state=state, db=db, rag_service=MagicMock())
+
+    assert "SHIP-90231" in result["tool_result"]
+    assert "DHL" in result["tool_result"]
+    assert "IN_TRANSIT" in result["tool_result"]
+
+
+def test_determine_product_tool():
+    state = {
+        "user_query": "What is the capacity of the AIS-200?",
+        "authenticated_user": ...,
+        "route": "tool",
+        "retrieved_context": [],
+        "tool_type": None,
+        "tool_result": "",
+        "response": ""
+    }
+
+    result = determine_tool_type(state)
+
+    assert result["tool_type"] == "product"
+
+
+def test_determine_customer_tool():
+    state = {
+        "user_query": "Show me information about customer CUST-001.",
+        "authenticated_user": ...,
+        "route": "tool",
+        "retrieved_context": [],
+        "tool_type": None,
+        "tool_result": "",
+        "response": ""
+    }
+
+    result = determine_tool_type(state)
+
+    assert result["tool_type"] == "customer"
