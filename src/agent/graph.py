@@ -1,6 +1,6 @@
 from typing import Literal
 from langchain_openai import ChatOpenAI
-from langgraph.graph import END, StateGraph
+from langgraph.graph import START, END, StateGraph
 from sqlalchemy.orm import Session
 from src.agent.router import route_request
 from src.agent.state import AgentState
@@ -257,7 +257,8 @@ def build_agent_graph(chat_model: ChatOpenAI, rag_service: RAGService, db: Sessi
             "determine_tool_type": "determine_tool_type"
         }
     )
-
+    
+    graph.add_edge(START, "route_request")
     graph.add_edge("determine_tool_type", "execute_tool")
     graph.add_edge("execute_tool", "generate_response")
     graph.add_edge("generate_response", END)

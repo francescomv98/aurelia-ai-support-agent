@@ -4,6 +4,8 @@ from sqlalchemy.orm import Session
 from src.auth.service import AuthenticationService
 from src.database.session import SessionLocal
 from src.logging.logger import logger
+from src.api.dependencies import get_current_user
+from src.auth.models import AuthenticatedUser
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
@@ -48,3 +50,12 @@ def login(request: LoginRequest, db: Session = Depends(get_db)) -> LoginResponse
     except ValueError as exc:
         logger.warning("Login rejected", username=request.username)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
+
+
+@router.get("/me", response_model=AuthenticatedUser)
+def get_me(current_user: AuthenticatedUser = Depends(get_current_user)) -> AuthenticatedUser:
+    """Return the identity associated with the access token."""
+
+    logger.info("Authenticated user requested", user_id=current_user.user_id, role=current_user.role.value)
+
+    return current_user
