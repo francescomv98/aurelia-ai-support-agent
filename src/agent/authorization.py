@@ -17,7 +17,7 @@ def authorize_action(state: AgentState) -> AgentState:
     
     approval_result = state["tool_result"]
 
-    if approval_result != "APPROVED":
+    if approval_result != "The requested action was approved.":
         logger.warning("Write action was not approved", action_type=pending_action.action_type)
         return state
 

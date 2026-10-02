@@ -13,6 +13,7 @@ from src.tools.ticket_tools import get_machine_ticket_tool
 from src.tools.shipment_tools import get_shipment_tool
 from src.tools.product_tools import get_product_tool
 from src.tools.customer_tools import get_customer_tool
+from src.services.order_service import OrderItemRequest
 import re
 from sqlalchemy import select
 from src.database.models import Customer
@@ -278,7 +279,15 @@ def execute_write_tool(state: AgentState, db: Session) -> AgentState:
     logger.info("Executing approved write action", action_type=pending_action.action_type)
 
     if pending_action.action_type == "create_order":
-        result = create_order_tool(db=db, user=state["authenticated_user"], items=pending_action.parameters.get("items", []))
+        items = [
+            OrderItemRequest(
+                product_code=item["product_code"],
+                quantity=item["quantity"]
+            )
+            for item in pending_action.parameters.get("items", [])
+        ]
+
+        result = create_order_tool(db=db, user=state["authenticated_user"], items=items)
 
         return {
             **state,
@@ -396,7 +405,7 @@ def build_agent_graph(chat_model: ChatOpenAI, rag_service: RAGService, db: Sessi
         "human_approval",
         lambda state: (
             "authorize_action"
-            if state["tool_result"] == "APPROVED"
+            if state["tool_result"] == "The requested action was approved."
             else "generate_response"
         ),
         {

@@ -10,7 +10,15 @@ def create_test_graph():
     route_response = MagicMock()
     route_response.route = "tool"
 
-    chat_model.with_structured_output.return_value.invoke.return_value = route_response
+    action_response = MagicMock()
+
+    action_item = MagicMock()
+    action_item.product_code = "AIS-200"
+    action_item.quantity = 2
+
+    action_response.items = [action_item]
+
+    chat_model.with_structured_output.return_value.invoke.side_effect = [ route_response, action_response]
 
     response = MagicMock()
     response.content = "The order action was approved."
@@ -21,6 +29,7 @@ def create_test_graph():
     rag_service.retrieve_context.return_value = []
 
     db = MagicMock()
+
     checkpointer = create_checkpointer()
 
     agent_graph = build_agent_graph(chat_model=chat_model, rag_service=rag_service, db=db, checkpointer=checkpointer)
@@ -41,6 +50,7 @@ def create_initial_state():
         "tool_result": "",
         "response": ""
     }
+
 
 
 def test_agent_graph_resumes_after_human_approval():
