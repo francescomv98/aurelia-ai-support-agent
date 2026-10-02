@@ -7,7 +7,7 @@ from src.agent.state import AgentState
 from src.logging.logger import logger
 from src.rag.rag_service import RAGService
 from src.tools.machine_tools import get_machine_tool
-from src.tools.order_tools import (create_order_tool, get_order_status_tool)
+from src.tools.order_tools import (create_order_tool, cancel_order_tool, get_order_status_tool)
 from src.services.maintenance_service import calculate_maintenance_status
 from src.tools.ticket_tools import get_machine_ticket_tool
 from src.tools.shipment_tools import get_shipment_tool
@@ -288,6 +288,19 @@ def execute_write_tool(state: AgentState, db: Session) -> AgentState:
         ]
 
         result = create_order_tool(db=db, user=state["authenticated_user"], items=items)
+
+        return {
+            **state,
+            "tool_result": result.message
+        }
+
+    if pending_action.action_type == "cancel_order":
+        order_number = pending_action.parameters.get("order_number")
+
+        if not order_number:
+            raise ValueError("Order number is required for cancel_order.")
+
+        result = cancel_order_tool(db=db, user=state["authenticated_user"], order_id=order_number)
 
         return {
             **state,

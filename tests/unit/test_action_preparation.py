@@ -49,7 +49,14 @@ def test_prepare_create_order_action():
 def test_prepare_cancel_order_action():
     state = create_state("Please cancel order ORD-10245.")
 
-    result = prepare_action(state)
+    chat_model = MagicMock()
+
+    response = MagicMock()
+    response.order_number = "ORD-10245"
+
+    chat_model.with_structured_output.return_value.invoke.return_value = response
+
+    result = prepare_action(state, chat_model=chat_model)
 
     assert result["pending_action"] is not None
     assert result["pending_action"].action_type == "cancel_order"
@@ -79,3 +86,40 @@ def test_prepare_action_returns_none_for_read_request():
     result = prepare_action(state)
 
     assert result["pending_action"] is None
+
+
+def test_prepare_cancel_order_action_extracts_order_number() -> None:
+    chat_model = MagicMock()
+
+    response = MagicMock()
+    response.order_number = "ORD-10245"
+
+    chat_model.with_structured_output.return_value.invoke.return_value = response
+
+    state = create_state(user_query="Cancel order ORD-10245")
+
+    result = prepare_action(state, chat_model=chat_model)
+
+    assert result["pending_action"] is not None
+    assert result["pending_action"].action_type == "cancel_order"
+    assert result["pending_action"].parameters == { "order_number": "ORD-10245" }
+
+
+def test_prepare_create_support_ticket_action():
+    state = create_state("Create a support ticket for machine AIS2-2025-00142.")
+
+    chat_model = MagicMock()
+
+    response = MagicMock()
+    response.category = "TECHNICAL"
+    response.priority = "P2"
+    response.subject = "Machine issue"
+    response.description = "The customer reported an issue with the machine."
+    response.machine_serial = "AIS2-2025-00142"
+
+    chat_model.with_structured_output.return_value.invoke.return_value = response
+
+    result = prepare_action(state, chat_model=chat_model)
+
+    assert result["pending_action"] is not None
+    assert result["pending_action"].action_type == "create_support_ticket"

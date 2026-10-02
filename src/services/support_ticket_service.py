@@ -150,3 +150,8 @@ def update_support_ticket(db: Session, ticket_number: str, customer_id: int, sta
         logger.exception("Failed to update support ticket", ticket_number=ticket_number, customer_id=customer_id)
 
         raise
+
+
+def get_machine_by_serial(db: Session, machine_serial: str, customer_id: int) -> Machine | None:
+    """Find a machine by serial number for an authorized customer."""
+    return db.scalar(select(Machine).where(Machine.serial_number == machine_serial, Machine.customer_id == customer_id))

@@ -154,25 +154,6 @@ def test_cancel_order_tool_customer_uses_own_customer_context():
     mock_cancel.assert_called_once_with(db=db, order_id="ORD-20001", customer_id=1)
 
 
-def test_cancel_order_tool_customer_uses_own_customer_context():
-    db = Mock()
-
-    user = AuthenticatedUser(user_id=1, customer_id=1, role=UserRole.CUSTOMER)
-
-    expected = CancelOrderResult(
-        status="CANCELLED",
-        order_number="ORD-20001",
-        message="Order ORD-20001 was cancelled successfully."
-    )
-
-    with patch("src.tools.order_tools.cancel_order", return_value=expected) as mock_cancel:
-        result = cancel_order_tool(db=db, order_id="ORD-20001", user=user)
-
-    assert result == expected
-
-    mock_cancel.assert_called_once_with(db=db, order_id="ORD-20001", customer_id=1)
-
-
 def test_cancel_order_tool_customer_without_context():
     db = Mock()
 
@@ -227,3 +208,40 @@ def test_cancel_order_tool_admin_can_cancel_for_customer():
     assert result == expected
 
     mock_cancel.assert_called_once_with(db=db, order_id="ORD-20001", customer_id=1)
+
+
+def test_cancel_order_tool_returns_not_found_result() -> None:
+    db = Mock()
+
+    user = AuthenticatedUser(user_id=1, customer_id=1, role=UserRole.CUSTOMER)
+
+    expected = CancelOrderResult(
+        status="NOT_FOUND",
+        order_number="ORD-99999",
+        message="Order ORD-99999 was not found."
+    )
+
+    with patch("src.tools.order_tools.cancel_order", return_value=expected) as mock_cancel:
+        result = cancel_order_tool(db=db, order_id="ORD-99999", user=user)
+
+    assert result == expected
+
+    mock_cancel.assert_called_once_with(db=db, order_id="ORD-99999", customer_id=1)
+
+
+def test_cancel_order_tool_customer_cannot_override_customer_context() -> None:
+    db = Mock()
+
+    user = AuthenticatedUser(user_id=1, customer_id=1, role=UserRole.CUSTOMER)
+
+    with pytest.raises(PermissionError):
+        cancel_order_tool(db=db, order_id="ORD-20001", user=user, customer_id=2)
+
+
+def test_cancel_order_tool_support_agent_without_customer_context_is_rejected() -> None:
+    db = Mock()
+
+    user = AuthenticatedUser(user_id=10, customer_id=None, role=UserRole.SUPPORT_AGENT)
+
+    with pytest.raises(ValueError, match="Customer ID is required"):
+        cancel_order_tool(db=db, order_id="ORD-20001", user=user)

@@ -1,6 +1,7 @@
 from src.agent.state import AgentState, PendingAction
 from src.logging.logger import logger
 from pydantic import BaseModel, Field
+import re
 
 class OrderItem(BaseModel):
     product_code: str = Field(description="The product code requested by the customer, such as AIS-100, AIS-200 or AIS-500.")
@@ -9,6 +10,18 @@ class OrderItem(BaseModel):
 
 class CreateOrderAction(BaseModel):
     items: list[OrderItem] = Field(description="The products and quantities that should be included in the new order.")
+
+
+class CancelOrderAction(BaseModel):
+    order_number: str = Field(description="The order number to cancel, such as ORD-10245.")
+
+
+class CreateSupportTicketAction(BaseModel):
+    category: str = Field(description="The support ticket category, such as TECHNICAL, MAINTENANCE, ORDER, SHIPPING or WARRANTY.")
+    priority: str = Field(description="The ticket priority, such as P1, P2, P3 or P4.")
+    subject: str = Field(description="A concise subject describing the support issue.")
+    description: str = Field(description="A clear description of the issue reported by the customer.")
+    machine_serial: str | None = Field(default=None, description="The machine serial number explicitly mentioned by the customer, if applicable.")
 
 
 WRITE_ACTION_KEYWORDS = {
@@ -62,12 +75,13 @@ def prepare_action(state: AgentState, chat_model=None) -> AgentState:
 
     It does not perform authorization or database mutations.
     """
-    query = state["user_query"].strip().lower()
-
     action_type = None
-    
+
+    normalized_query = re.sub(r"\bp[1-4]\b", "", state["user_query"].lower())
+    normalized_query = " ".join(normalized_query.split())
+
     for candidate_action, keywords in WRITE_ACTION_KEYWORDS.items():
-        if any(keyword in query for keyword in keywords):
+        if any(keyword in normalized_query for keyword in keywords):
             action_type = candidate_action
             break
 
@@ -118,6 +132,82 @@ Do not invent products or quantities.
             "pending_action": pending_action
         }
 
+    if action_type == "cancel_order":
+        if chat_model is None:
+            raise ValueError("Chat model is required to prepare a cancel_order action.")
+
+        structured_model = chat_model.with_structured_output(CancelOrderAction)
+
+        action = structured_model.invoke(
+            f"""
+    Extract the order number from the following customer request.
+
+    Customer request:
+    {state["user_query"]}
+
+    Return the order number explicitly mentioned by the customer.
+    Do not invent an order number.
+    """
+        )
+
+        pending_action = PendingAction(
+            action_type="cancel_order",
+            description=state["user_query"].strip(),
+            parameters={
+                "order_number": action.order_number
+            }
+        )
+
+        logger.info("Write action prepared", action_type="cancel_order", order_number=action.order_number)
+
+        return {
+            **state,
+            "pending_action": pending_action
+        }
+
+    if action_type == "create_support_ticket":
+        if chat_model is None:
+            raise ValueError("Chat model is required to prepare a create_support_ticket action.")
+
+        structured_model = chat_model.with_structured_output(CreateSupportTicketAction)
+
+        action = structured_model.invoke(
+            f"""
+    Extract the support ticket information from the following customer request.
+
+    Customer request:
+    {state["user_query"]}
+
+    Return:
+    - the ticket category
+    - the ticket priority
+    - a concise subject
+    - a clear description of the issue
+    - the machine serial number if explicitly mentioned
+
+    Do not invent information that is not present in the customer request.
+    """
+        )
+
+        pending_action = PendingAction(
+            action_type="create_support_ticket",
+            description=state["user_query"].strip(),
+            parameters={
+                "category": action.category,
+                "priority": action.priority,
+                "subject": action.subject,
+                "description": action.description,
+                "machine_serial": action.machine_serial
+            }
+        )
+
+        logger.info("Write action prepared", action_type="create_support_ticket", priority=action.priority, machine_serial=action.machine_serial)
+
+        return {
+            **state,
+            "pending_action": pending_action
+        }
+    
     pending_action = PendingAction(
         action_type=action_type,
         description=state["user_query"].strip(),
