@@ -27,7 +27,7 @@ def get_order_status_tool(db: Session, order_id: str, user: AuthenticatedUser, c
 
     require_customer_access(user, target_customer_id)
 
-    result = get_order_status(db=db, order_id=order_id, customer_id=user.customer_id)
+    result = get_order_status(db=db, order_id=order_id, customer_id=target_customer_id)
 
     return result.message
 
