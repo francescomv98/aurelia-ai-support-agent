@@ -13,6 +13,7 @@ from src.tools.ticket_tools import get_machine_ticket_tool
 from src.tools.shipment_tools import get_shipment_tool
 from src.tools.product_tools import get_product_tool
 from src.tools.customer_tools import get_customer_tool
+from src.tools.support_ticket_tools import create_support_ticket_tool
 from src.services.order_service import OrderItemRequest
 import re
 from sqlalchemy import select
@@ -301,6 +302,17 @@ def execute_write_tool(state: AgentState, db: Session) -> AgentState:
             raise ValueError("Order number is required for cancel_order.")
 
         result = cancel_order_tool(db=db, user=state["authenticated_user"], order_id=order_number)
+
+        return {
+            **state,
+            "tool_result": result.message
+        }
+
+    if pending_action.action_type == "create_support_ticket":
+        machine_serial = pending_action.parameters.get("machine_serial")
+
+        result = create_support_ticket_tool(db=db, user=state["authenticated_user"], category=pending_action.parameters["category"], priority=pending_action.parameters["priority"],
+            subject=pending_action.parameters["subject"], description=pending_action.parameters["description"], machine_serial=machine_serial)
 
         return {
             **state,
