@@ -5,6 +5,8 @@ from src.auth.models import AuthenticatedUser
 from src.auth.password import verify_password
 from src.database.models import User
 from src.logging.logger import logger
+from sqlalchemy.exc import SQLAlchemyError
+from src.services.exceptions import DatabaseError
 
 class AuthenticationService:
     """Handle user authentication and access token creation."""
@@ -49,9 +51,12 @@ class AuthenticationService:
 
             return token
 
+    
+        except SQLAlchemyError as exc:
+            logger.exception("Database operation failed")
+            raise DatabaseError("Database operation failed.") from exc 
         except ValueError:
             raise
-
         except Exception:
             logger.exception("Authentication service failed", username=username)
             raise

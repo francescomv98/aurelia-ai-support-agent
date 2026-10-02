@@ -1,6 +1,7 @@
 from src.auth.models import AuthenticatedUser
 from src.security.authorization import require_customer_access
 from src.services.shipment_service import ShipmentResult, get_shipment
+from src.services.exceptions import AuthorizationError, ValidationError
 
 def get_shipment_tool(db, tracking_number: str, user: AuthenticatedUser, customer_id: int | None = None) -> ShipmentResult:
     """
@@ -9,13 +10,13 @@ def get_shipment_tool(db, tracking_number: str, user: AuthenticatedUser, custome
 
     if user.role.value == "CUSTOMER":
         if user.customer_id is None:
-            raise PermissionError("Customer user is not associated with a customer.")
+            raise AuthorizationError("Customer user is not associated with a customer.")
 
         target_customer_id = user.customer_id
 
     else:
         if customer_id is None:
-            raise ValueError("Customer ID is required for internal users.")
+            raise ValidationError("Customer ID is required for internal users.")
 
         target_customer_id = customer_id
 

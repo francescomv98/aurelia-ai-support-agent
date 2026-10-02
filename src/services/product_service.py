@@ -4,6 +4,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from src.database.models import Product
 from src.logging.logger import logger
+from sqlalchemy.exc import SQLAlchemyError
+from src.services.exceptions import DatabaseError
 
 class ProductResult(BaseModel):
     status: Literal["FOUND", "NOT_FOUND"]
@@ -18,7 +20,11 @@ class ProductResult(BaseModel):
 def get_product(db: Session, product_code: str) -> ProductResult:
     """Retrieve product information from the database."""
 
-    product = db.scalar(select(Product).where(Product.product_code == product_code))
+    try:
+        product = db.scalar(select(Product).where(Product.product_code == product_code))    
+    except SQLAlchemyError as exc:
+        logger.exception("Database operation failed")
+        raise DatabaseError("Database operation failed.") from exc  
 
     if product is None:
         logger.info("Product not found", product_code=product_code)

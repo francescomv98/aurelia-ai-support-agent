@@ -22,6 +22,8 @@ from langgraph.checkpoint.postgres import PostgresSaver
 from src.agent.action_preparation import prepare_action
 from src.agent.human_approval import request_human_approval
 from src.agent.authorization import authorize_action
+from sqlalchemy.exc import SQLAlchemyError
+from src.services.exceptions import DatabaseError
 
 def retrieve_context(state: AgentState, rag_service: RAGService) -> AgentState:
     """Retrieve relevant documentation for the user query."""
@@ -245,7 +247,11 @@ def execute_tool(state: AgentState, db: Session, rag_service: RAGService) -> Age
         if customer_match:
             customer_code = customer_match.group(0)
 
-            customer = db.scalar(select(Customer).where(Customer.customer_code == customer_code))
+            try:
+                customer = db.scalar(select(Customer).where(Customer.customer_code == customer_code))
+            except SQLAlchemyError as exc:
+                logger.exception("Database operation failed")
+                raise DatabaseError("Database operation failed.") from exc 
 
             if customer is None:
                 return {

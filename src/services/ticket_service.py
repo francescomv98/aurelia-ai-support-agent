@@ -4,6 +4,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from src.database.models import SupportTicket
 from src.logging.logger import logger
+from sqlalchemy.exc import SQLAlchemyError
+from src.services.exceptions import DatabaseError
 
 class TicketResult(BaseModel):
     """Result returned by the support ticket service."""
@@ -29,8 +31,8 @@ def get_machine_ticket(db: Session, machine_serial: str, customer_id: int) -> Ti
             .where(SupportTicket.machine.has(serial_number=machine_serial), SupportTicket.customer_id == customer_id)
             .order_by(SupportTicket.created_at.desc())
         )
-
-        ticket = db.scalar(statement)
+        
+        ticket = db.scalar(statement)         
 
         if ticket is None:
             logger.info("No support ticket found for machine", machine_serial=machine_serial)
@@ -57,7 +59,10 @@ def get_machine_ticket(db: Session, machine_serial: str, customer_id: int) -> Ti
                 f"Subject: {ticket.subject}."
             )
         )
-
+    
+    except SQLAlchemyError as exc:
+        logger.exception("Database operation failed")
+        raise DatabaseError("Database operation failed.") from exc 
     except Exception:
         logger.exception("Failed to retrieve support ticket", machine_serial=machine_serial)
         raise

@@ -4,6 +4,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from src.database.models import Customer
 from src.logging.logger import logger
+from sqlalchemy.exc import SQLAlchemyError
+from src.services.exceptions import DatabaseError
 
 class CustomerResult(BaseModel):
     status: Literal["FOUND", "NOT_FOUND"]
@@ -17,7 +19,11 @@ class CustomerResult(BaseModel):
 def get_customer(db: Session, customer_id: int) -> CustomerResult:
     """Retrieve customer information from the database."""
 
-    customer = db.scalar(select(Customer).where(Customer.id == customer_id))
+    try:
+        customer = db.scalar(select(Customer).where(Customer.id == customer_id))
+    except SQLAlchemyError as exc:
+        logger.exception("Database operation failed")
+        raise DatabaseError("Database operation failed.") from exc    
 
     if customer is None:
         logger.info("Customer not found", customer_id=customer_id)

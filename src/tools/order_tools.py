@@ -3,11 +3,8 @@ from src.auth.models import AuthenticatedUser
 from src.database.models import UserRole
 from src.logging.logger import logger
 from src.security.authorization import require_customer_access
-from src.services.order_service import get_order_status
-from src.auth.models import AuthenticatedUser
-from src.security.authorization import require_customer_access
-from src.services.order_service import (CreateOrderResult, OrderItemRequest, create_order)
-from src.services.order_service import (CancelOrderResult, cancel_order)
+from src.services.order_service import (CreateOrderResult, OrderItemRequest, CancelOrderResult, cancel_order, create_order, get_order_status)
+from src.services.exceptions import AuthorizationError, ValidationError
 
 def get_order_status_tool(db: Session, order_id: str, user: AuthenticatedUser, customer_id: int | None = None,) -> str:
     """Retrieve an order status after authorization."""
@@ -16,12 +13,12 @@ def get_order_status_tool(db: Session, order_id: str, user: AuthenticatedUser, c
 
     if user.role == UserRole.CUSTOMER:
         if user.customer_id is None:
-            raise PermissionError("Customer user has no customer context.")
+            raise AuthorizationError("Customer user has no customer context.")
 
         target_customer_id = user.customer_id
     else:
         if customer_id is None:
-            raise ValueError("Customer ID is required for internal users.")
+            raise ValidationError("Customer ID is required for internal users.")
 
         target_customer_id = customer_id
 
@@ -37,16 +34,16 @@ def create_order_tool(db, user: AuthenticatedUser, items: list[OrderItemRequest]
 
     if user.role.value == "CUSTOMER":
         if user.customer_id is None:
-            raise PermissionError("Customer user is not associated with a customer.")
+            raise AuthorizationError("Customer user is not associated with a customer.")
 
         if customer_id is not None and customer_id != user.customer_id:
-            raise PermissionError("Customer users cannot create orders for another customer.")
+            raise AuthorizationError("Customer users cannot create orders for another customer.")
 
         target_customer_id = user.customer_id
 
     else:
         if customer_id is None:
-            raise ValueError("Customer ID is required for internal users.")
+            raise ValidationError("Customer ID is required for internal users.")
 
         target_customer_id = customer_id
 
@@ -60,16 +57,16 @@ def cancel_order_tool(db, order_id: str, user: AuthenticatedUser, customer_id: i
 
     if user.role.value == "CUSTOMER":
         if user.customer_id is None:
-            raise PermissionError("Customer user is not associated with a customer.")
+            raise AuthorizationError("Customer user is not associated with a customer.")
 
         if customer_id is not None and customer_id != user.customer_id:
-            raise PermissionError("Customer users cannot cancel orders for another customer.")
+            raise AuthorizationError("Customer users cannot cancel orders for another customer.")
 
         target_customer_id = user.customer_id
 
     else:
         if customer_id is None:
-            raise ValueError("Customer ID is required for internal users.")
+            raise ValidationError("Customer ID is required for internal users.")
 
         target_customer_id = customer_id
 

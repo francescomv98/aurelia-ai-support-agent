@@ -1,6 +1,7 @@
 from typing import Literal
 from pydantic import BaseModel
 from src.logging.logger import logger
+from src.services.exceptions import ValidationError
 
 class MaintenanceResult(BaseModel):
     """Result returned by the maintenance calculation service."""
@@ -18,10 +19,10 @@ def calculate_maintenance_status(current_hours: int, maintenance_interval: int) 
     logger.info("Calculating maintenance status", current_hours=current_hours, maintenance_interval=maintenance_interval)
 
     if current_hours < 0:
-        raise ValueError("Current operating hours cannot be negative.")
+        raise ValidationError("Current operating hours cannot be negative.")
 
     if maintenance_interval <= 0:
-        raise ValueError("Maintenance interval must be greater than zero.")
+        raise ValidationError("Maintenance interval must be greater than zero.")
 
     if current_hours >= maintenance_interval:
         result = MaintenanceResult(

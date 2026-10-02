@@ -5,6 +5,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from src.database.models import Order, Shipment
 from src.logging.logger import logger
+from sqlalchemy.exc import SQLAlchemyError
+from src.services.exceptions import DatabaseError
 
 class ShipmentResult(BaseModel):
     status: Literal["FOUND", "NOT_FOUND"]
@@ -16,14 +18,15 @@ class ShipmentResult(BaseModel):
 
 
 def get_shipment(db: Session, tracking_number: str, customer_id: int) -> ShipmentResult:
-    shipment = db.scalar(
-        select(Shipment)
-        .join(Order, Shipment.order_id == Order.id)
-        .where(
-            Shipment.tracking_number == tracking_number,
-            Order.customer_id == customer_id
+    try:
+        shipment = db.scalar(
+            select(Shipment)
+            .join(Order, Shipment.order_id == Order.id)
+            .where(Shipment.tracking_number == tracking_number, Order.customer_id == customer_id)
         )
-    )
+    except SQLAlchemyError as exc:
+        logger.exception("Database operation failed")
+        raise DatabaseError("Database operation failed.") from exc  
 
     if shipment is None:
         logger.info("Shipment not found", tracking_number=tracking_number, customer_id=customer_id)

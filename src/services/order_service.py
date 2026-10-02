@@ -6,6 +6,9 @@ from pydantic import BaseModel
 from src.logging.logger import logger
 from decimal import Decimal
 from datetime import datetime, timezone
+from src.services.exceptions import ValidationError
+from sqlalchemy.exc import SQLAlchemyError
+from src.services.exceptions import DatabaseError
 
 class OrderResult(BaseModel):
     """Result returned by the order service."""
@@ -56,12 +59,7 @@ def get_order_status(db: Session, order_id: str, customer_id: int) -> OrderResul
     logger.info("Retrieving order status", order_id=order_id)
 
     try:
-        statement = select(Order).where(
-            Order.order_number == order_id,
-            Order.customer_id == customer_id
-        )
-
-        order = db.scalar(statement)
+        order = db.scalar(select(Order).where(Order.order_number == order_id, Order.customer_id == customer_id))
 
         if order is None:
             logger.info("Order not found for customer", order_id=order_id)
@@ -79,6 +77,9 @@ def get_order_status(db: Session, order_id: str, customer_id: int) -> OrderResul
             message=f"Order {order_id} is {order.status}."
         )
 
+    except SQLAlchemyError as exc:
+        logger.exception("Database operation failed")
+        raise DatabaseError("Database operation failed.") from exc  
     except Exception:
         logger.exception("Failed to retrieve order status", order_id=order_id)
         raise
@@ -88,38 +89,38 @@ def create_order(db: Session, customer_id: int, items: list[OrderItemRequest]) -
     """Create a new order for a customer."""
 
     if not items:
-        raise ValueError("At least one order item is required.")
+        raise ValidationError("At least one order item is required.")
 
     for item in items:
         if item.quantity <= 0:
-            raise ValueError("Order item quantity must be greater than zero.")
-
-    normalized_items: list[tuple[Product, int, Decimal]] = []
-
-    for item in items:
-        product_code = PRODUCT_CODE_ALIASES.get(item.product_code.upper(), item.product_code.upper())
-
-        product = db.scalar(select(Product).where(Product.product_code == product_code))
-
-        if product is None:
-            return CreateOrderResult(
-                status="FAILED",
-                order_number=None,
-                message=f"The product {item.product_code} was not found in the catalog."
-            )
-
-        unit_price = PRODUCT_PRICES.get(product.product_code)
-
-        if unit_price is None:
-            return CreateOrderResult(
-                status="FAILED",
-                order_number=None,
-                message=f"No price is available for product {item.product_code}."
-            )
-
-        normalized_items.append((product, item.quantity, unit_price))
+            raise ValidationError("Order item quantity must be greater than zero.")
 
     try:
+        normalized_items: list[tuple[Product, int, Decimal]] = []
+
+        for item in items:
+            product_code = PRODUCT_CODE_ALIASES.get(item.product_code.upper(), item.product_code.upper())
+
+            product = db.scalar(select(Product).where(Product.product_code == product_code))
+
+            if product is None:
+                return CreateOrderResult(
+                    status="FAILED",
+                    order_number=None,
+                    message=f"The product {item.product_code} was not found in the catalog."
+                )
+
+            unit_price = PRODUCT_PRICES.get(product.product_code)
+
+            if unit_price is None:
+                return CreateOrderResult(
+                    status="FAILED",
+                    order_number=None,
+                    message=f"No price is available for product {item.product_code}."
+                )
+
+            normalized_items.append((product, item.quantity, unit_price))
+
         existing_orders = db.scalars(select(Order.order_number)).all()
 
         order_numbers = [
@@ -163,11 +164,13 @@ def create_order(db: Session, customer_id: int, items: list[OrderItemRequest]) -
             message=f"Order {order_number} was created successfully."
         )
 
+    except SQLAlchemyError as exc:
+        db.rollback()
+        logger.exception("Database operation failed")
+        raise DatabaseError("Database operation failed.") from exc  
     except Exception:
         db.rollback()
-
         logger.exception("Failed to create order", customer_id=customer_id)
-
         raise
 
 
@@ -177,12 +180,7 @@ def cancel_order(db: Session, order_id: str, customer_id: int) -> CancelOrderRes
     logger.info("Cancelling order", order_id=order_id, customer_id=customer_id)
 
     try:
-        statement = select(Order).where(
-            Order.order_number == order_id,
-            Order.customer_id == customer_id
-        )
-
-        order = db.scalar(statement)
+        order = db.scalar(select(Order).where(Order.order_number == order_id, Order.customer_id == customer_id)) 
 
         if order is None:
             logger.info("Order not found for customer", order_id=order_id, customer_id=customer_id)
@@ -195,11 +193,7 @@ def cancel_order(db: Session, order_id: str, customer_id: int) -> CancelOrderRes
 
         current_status = (order.status.value if hasattr(order.status, "value") else order.status)
 
-        cancellable_statuses = {
-            "PENDING",
-            "CONFIRMED",
-            "PROCESSING"
-        }
+        cancellable_statuses = { "PENDING", "CONFIRMED", "PROCESSING" }
 
         if current_status not in cancellable_statuses:
             logger.info("Order cannot be cancelled", order_id=order_id, status=current_status)
@@ -207,9 +201,7 @@ def cancel_order(db: Session, order_id: str, customer_id: int) -> CancelOrderRes
             return CancelOrderResult(
                 status="NOT_CANCELLABLE",
                 order_number=order.order_number,
-                message=(
-                    f"Order {order_id} cannot be cancelled because it is currently {current_status}."
-                )
+                message=f"Order {order_id} cannot be cancelled because it is currently {current_status}."
             )
 
         order.status = "CANCELLED"
@@ -222,10 +214,12 @@ def cancel_order(db: Session, order_id: str, customer_id: int) -> CancelOrderRes
             order_number=order.order_number,
             message=f"Order {order_id} was cancelled successfully."
         )
-
+       
+    except SQLAlchemyError as exc:
+        db.rollback()
+        logger.exception("Database operation failed")
+        raise DatabaseError("Database operation failed.") from exc  
     except Exception:
         db.rollback()
-
         logger.exception("Failed to cancel order", order_id=order_id, customer_id=customer_id)
-
         raise
