@@ -16,6 +16,9 @@ from src.tools.customer_tools import get_customer_tool
 import re
 from sqlalchemy import select
 from src.database.models import Customer
+from langgraph.checkpoint.postgres import PostgresSaver
+from src.agent.action_preparation import prepare_action
+from src.agent.human_approval import request_human_approval
 
 def retrieve_context(state: AgentState, rag_service: RAGService) -> AgentState:
     """Retrieve relevant documentation for the user query."""
@@ -54,6 +57,23 @@ def determine_tool_type(state: AgentState) -> AgentState:
     return {
         **state,
         "tool_type": tool_type
+    }
+
+
+def human_approval(state: AgentState) -> AgentState:
+    if state["pending_action"] is None:
+        logger.error("Human approval requested without pending action")
+        raise ValueError("No pending action available for human approval.")
+
+    decision = request_human_approval(state["pending_action"])
+
+    return {
+        **state,
+        "tool_result": (
+            "The requested action was approved."
+            if decision == "APPROVED"
+            else "The requested action was rejected."
+        )
     }
 
 
@@ -303,7 +323,7 @@ def route_after_retrieval(state: AgentState) -> Literal["generate_response", "de
     return "determine_tool_type"
 
 
-def build_agent_graph(chat_model: ChatOpenAI, rag_service: RAGService, db: Session):
+def build_agent_graph(chat_model: ChatOpenAI, rag_service: RAGService, db: Session, checkpointer: PostgresSaver):
     """Build the Aurelia support agent graph."""
 
     graph = StateGraph(AgentState)
@@ -311,6 +331,8 @@ def build_agent_graph(chat_model: ChatOpenAI, rag_service: RAGService, db: Sessi
     graph.add_node("route_request", lambda state: route_request(state, chat_model))
     graph.add_node("retrieve_context", lambda state: retrieve_context(state, rag_service))
     graph.add_node("determine_tool_type", determine_tool_type)
+    graph.add_node("prepare_action", prepare_action)
+    graph.add_node("human_approval", human_approval)
     graph.add_node("execute_tool", lambda state: execute_tool(state, db, rag_service))
     graph.add_node("generate_response", lambda state: generate_response(state, chat_model, rag_service))
                    
@@ -333,9 +355,24 @@ def build_agent_graph(chat_model: ChatOpenAI, rag_service: RAGService, db: Sessi
         }
     )
 
+    
+    graph.add_conditional_edges(
+        "prepare_action",
+        lambda state: (
+            "human_approval"
+            if state["pending_action"] is not None
+            else "execute_tool"
+        ),
+        {
+            "human_approval": "human_approval",
+            "execute_tool": "execute_tool"
+        }
+    )
+
     graph.add_edge(START, "route_request")
-    graph.add_edge("determine_tool_type", "execute_tool")
+    graph.add_edge("determine_tool_type", "prepare_action")
+    graph.add_edge("human_approval", "generate_response")
     graph.add_edge("execute_tool", "generate_response")
     graph.add_edge("generate_response", END)
 
-    return graph.compile()
+    return graph.compile(checkpointer=checkpointer)

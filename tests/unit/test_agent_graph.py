@@ -7,6 +7,9 @@ from src.services.ticket_service import TicketResult
 from src.services.shipment_service import ShipmentResult
 import pytest
 from unittest.mock import MagicMock
+from src.agent.graph import build_agent_graph
+from src.agent.graph import human_approval
+from langgraph.checkpoint.memory import InMemorySaver
 
 def create_customer_user() -> AuthenticatedUser:
     return AuthenticatedUser(user_id=1, customer_id=1, role=UserRole.CUSTOMER)
@@ -333,3 +336,30 @@ def test_determine_customer_tool():
     result = determine_tool_type(state)
 
     assert result["tool_type"] == "customer"
+
+
+def test_build_agent_graph_with_checkpointer():
+    chat_model = MagicMock()
+    rag_service = MagicMock()
+    db = MagicMock()
+    checkpointer = InMemorySaver()
+
+    graph = build_agent_graph(chat_model=chat_model, rag_service=rag_service, db=db, checkpointer=checkpointer)
+
+    assert graph is not None
+
+
+def test_human_approval_requires_pending_action():
+    state = {
+        "user_query": "Hello",
+        "authenticated_user": MagicMock(),
+        "route": "tool",
+        "retrieved_context": [],
+        "tool_type": "order",
+        "pending_action": None,
+        "tool_result": "",
+        "response": ""
+    }
+
+    with pytest.raises(ValueError, match="No pending action"):
+        human_approval(state)

@@ -16,15 +16,16 @@ def test_chat_requires_authentication() -> None:
 
     assert response.status_code == 401
 
-
 def test_chat_rejects_empty_message() -> None:
     app.dependency_overrides[get_current_user] = override_customer_user
 
     try:
-        response = client.post("/chat", json={"message": "   "})
+        response = client.post("/chat", json={"message": "   "})        
+        data = response.json()
 
         assert response.status_code == 200
-        assert response.json() == { "response": "Please provide a message." }
+        assert data["response"] == "Please provide a message."
+        assert data["thread_id"]
     finally:
         app.dependency_overrides.clear()
 
@@ -42,9 +43,11 @@ def test_chat_returns_agent_response(mock_create_chat_model: MagicMock, mock_cre
 
     try:
         response = client.post("/chat", json={"message": "What is the status of order ORD-10245?"})
+        data = response.json()
 
         assert response.status_code == 200
-        assert response.json() == { "response": "The status of order ORD-10245 is SHIPPED." }
+        assert data["response"] == "The status of order ORD-10245 is SHIPPED."
+        assert data["thread_id"]
 
         mock_create_chat_model.assert_called_once()
         mock_create_rag_service.assert_called_once()
