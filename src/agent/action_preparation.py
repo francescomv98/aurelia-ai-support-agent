@@ -24,6 +24,14 @@ class CreateSupportTicketAction(BaseModel):
     machine_serial: str | None = Field(default=None, description="The machine serial number explicitly mentioned by the customer, if applicable.")
 
 
+class UpdateSupportTicketAction(BaseModel):
+    ticket_number: str = Field(description="The support ticket number to update, such as TCK-5021.")
+    status: str | None = Field(default=None, description="The new ticket status, if the customer wants to change it.")
+    priority: str | None = Field(default=None, description="The new ticket priority, such as P1, P2, P3 or P4, if the customer wants to change it.")
+    subject: str | None = Field(default=None, description="The new ticket subject, if the customer wants to change it.")
+    description: str | None = Field(default=None, description="The new ticket description, if the customer wants to change it.")
+
+
 WRITE_ACTION_KEYWORDS = {
     "create_order": (
         "create order",
@@ -202,6 +210,53 @@ Do not invent products or quantities.
         )
 
         logger.info("Write action prepared", action_type="create_support_ticket", priority=action.priority, machine_serial=action.machine_serial)
+
+        return {
+            **state,
+            "pending_action": pending_action
+        }
+
+    if action_type == "update_support_ticket":
+        if chat_model is None:
+            raise ValueError("Chat model is required to prepare an update_support_ticket action.")
+
+        structured_model = chat_model.with_structured_output(UpdateSupportTicketAction)
+
+        action = structured_model.invoke(
+            f"""
+Extract the support ticket update information from the following customer request.
+
+Customer request:
+{state["user_query"]}
+
+Return:
+- the support ticket number
+- the new status, if explicitly requested
+- the new priority, if explicitly requested
+- the new subject, if explicitly requested
+- the new description, if explicitly requested
+
+Only return values explicitly requested by the customer.
+Do not invent or modify values that are not mentioned.
+"""
+        )
+
+        if all(value is None for value in (action.status, action.priority, action.subject, action.description)):
+            raise ValueError("At least one support ticket field must be provided for update.")
+
+        pending_action = PendingAction(
+            action_type="update_support_ticket",
+            description=state["user_query"].strip(),
+            parameters={
+                "ticket_number": action.ticket_number,
+                "status": action.status,
+                "priority": action.priority,
+                "subject": action.subject,
+                "description": action.description
+            }
+        )
+
+        logger.info("Write action prepared", action_type="update_support_ticket", ticket_number=action.ticket_number)
 
         return {
             **state,

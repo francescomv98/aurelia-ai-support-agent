@@ -2,7 +2,7 @@ from src.auth.models import AuthenticatedUser
 from src.security.authorization import require_customer_access
 from src.services.support_ticket_service import (CreateSupportTicketResult, UpdateSupportTicketResult, create_support_ticket, update_support_ticket, get_machine_by_serial)
 
-def create_support_ticket_tool(db, user: AuthenticatedUser, category: str, priority: str, subject: str, description: str, machine_serial: int | None = None, customer_id: int | None = None) -> CreateSupportTicketResult:
+def create_support_ticket_tool(db, user: AuthenticatedUser, category: str, priority: str, subject: str, description: str, machine_serial: str | None = None, customer_id: int | None = None) -> CreateSupportTicketResult:
     """Create a support ticket for an authorized customer."""
 
     if user.role.value == "CUSTOMER":

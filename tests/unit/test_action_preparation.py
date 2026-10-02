@@ -72,13 +72,31 @@ def test_prepare_create_support_ticket_action():
 
 
 def test_prepare_update_support_ticket_action():
-    state = create_state("Update support ticket TCK-5021.")
+    state = create_state("Update support ticket TCK-5021 and change the priority to P1.")
 
-    result = prepare_action(state)
+    chat_model = MagicMock()
+
+    action_response = MagicMock()
+    action_response.ticket_number = "TCK-5021"
+    action_response.status = None
+    action_response.priority = "P1"
+    action_response.subject = None
+    action_response.description = None
+
+    chat_model.with_structured_output.return_value.invoke.return_value = action_response
+
+    result = prepare_action(state, chat_model=chat_model)
 
     assert result["pending_action"] is not None
     assert result["pending_action"].action_type == "update_support_ticket"
 
+    assert result["pending_action"].parameters == {
+        "ticket_number": "TCK-5021",
+        "status": None,
+        "priority": "P1",
+        "subject": None,
+        "description": None
+    }
 
 def test_prepare_action_returns_none_for_read_request():
     state = create_state("What is the status of order ORD-10245?")
