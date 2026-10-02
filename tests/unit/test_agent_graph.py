@@ -6,7 +6,7 @@ from src.services.machine_service import MachineResult
 from src.services.ticket_service import TicketResult
 from src.services.shipment_service import ShipmentResult
 import pytest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from src.agent.graph import build_agent_graph
 from src.agent.graph import human_approval
 from langgraph.checkpoint.memory import InMemorySaver
@@ -363,3 +363,31 @@ def test_human_approval_requires_pending_action():
 
     with pytest.raises(ValueError, match="No pending action"):
         human_approval(state)
+
+
+def test_write_action_approved_reaches_execute_write_tool():
+    chat_model = MagicMock()
+
+    route_response = MagicMock()
+    route_response.route = "tool"
+
+    chat_model.with_structured_output.return_value.invoke.side_effect = [ route_response ]
+
+    rag_service = MagicMock()
+    checkpointer = InMemorySaver()
+    db = MagicMock()
+
+    with patch("src.agent.graph.request_human_approval", return_value="APPROVED"), patch(
+        "src.agent.graph.execute_write_tool",
+        return_value={
+            "user_query": "Create an order for 2 AIS-200 machines.",
+            "authenticated_user": MagicMock(),
+            "route": "tool",
+            "retrieved_context": [],
+            "tool_type": "order",
+            "pending_action": MagicMock(),
+            "tool_result": "Order created successfully.",
+            "response": ""
+        }) as mock_execute_write:
+
+        graph = build_agent_graph(chat_model=chat_model, rag_service=rag_service, db=db, checkpointer=checkpointer)

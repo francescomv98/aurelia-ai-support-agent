@@ -7,7 +7,7 @@ from src.agent.state import AgentState
 from src.logging.logger import logger
 from src.rag.rag_service import RAGService
 from src.tools.machine_tools import get_machine_tool
-from src.tools.order_tools import get_order_status_tool
+from src.tools.order_tools import (create_order_tool, get_order_status_tool)
 from src.services.maintenance_service import calculate_maintenance_status
 from src.tools.ticket_tools import get_machine_ticket_tool
 from src.tools.shipment_tools import get_shipment_tool
@@ -19,6 +19,7 @@ from src.database.models import Customer
 from langgraph.checkpoint.postgres import PostgresSaver
 from src.agent.action_preparation import prepare_action
 from src.agent.human_approval import request_human_approval
+from src.agent.authorization import authorize_action
 
 def retrieve_context(state: AgentState, rag_service: RAGService) -> AgentState:
     """Retrieve relevant documentation for the user query."""
@@ -267,6 +268,26 @@ def execute_tool(state: AgentState, db: Session, rag_service: RAGService) -> Age
     }
 
 
+def execute_write_tool(state: AgentState, db: Session) -> AgentState:
+    pending_action = state["pending_action"]
+
+    if pending_action is None:
+        logger.error("Write tool execution requested without pending action")
+        raise ValueError("No pending action available for write execution.")
+
+    logger.info("Executing approved write action", action_type=pending_action.action_type)
+
+    if pending_action.action_type == "create_order":
+        result = create_order_tool(db=db, user=state["authenticated_user"], items=pending_action.parameters.get("items", []))
+
+        return {
+            **state,
+            "tool_result": result.message
+        }
+
+    raise ValueError(f"Unsupported write action: {pending_action.action_type}")
+
+
 def generate_response(state: AgentState, chat_model: ChatOpenAI, rag_service: RAGService) -> AgentState:
     """Generate the final response using retrieved context and/or tool results."""
     logger.info("Generating agent response")
@@ -331,9 +352,11 @@ def build_agent_graph(chat_model: ChatOpenAI, rag_service: RAGService, db: Sessi
     graph.add_node("route_request", lambda state: route_request(state, chat_model))
     graph.add_node("retrieve_context", lambda state: retrieve_context(state, rag_service))
     graph.add_node("determine_tool_type", determine_tool_type)
-    graph.add_node("prepare_action", prepare_action)
+    graph.add_node("prepare_action", lambda state: prepare_action(state, chat_model))
     graph.add_node("human_approval", human_approval)
+    graph.add_node("authorize_action", authorize_action)
     graph.add_node("execute_tool", lambda state: execute_tool(state, db, rag_service))
+    graph.add_node("execute_write_tool", lambda state: execute_write_tool(state, db))
     graph.add_node("generate_response", lambda state: generate_response(state, chat_model, rag_service))
                    
     graph.add_conditional_edges(
@@ -369,9 +392,23 @@ def build_agent_graph(chat_model: ChatOpenAI, rag_service: RAGService, db: Sessi
         }
     )
 
+    graph.add_conditional_edges(
+        "human_approval",
+        lambda state: (
+            "authorize_action"
+            if state["tool_result"] == "APPROVED"
+            else "generate_response"
+        ),
+        {
+            "authorize_action": "authorize_action",
+            "generate_response": "generate_response"
+        }
+    )
+
     graph.add_edge(START, "route_request")
-    graph.add_edge("determine_tool_type", "prepare_action")
-    graph.add_edge("human_approval", "generate_response")
+    graph.add_edge("authorize_action", "execute_write_tool")
+    graph.add_edge("execute_write_tool", "generate_response")
+    graph.add_edge("determine_tool_type", "prepare_action")    
     graph.add_edge("execute_tool", "generate_response")
     graph.add_edge("generate_response", END)
 

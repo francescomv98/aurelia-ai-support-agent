@@ -1,5 +1,6 @@
 from src.agent.action_preparation import prepare_action
 from src.auth.models import AuthenticatedUser, UserRole
+from unittest.mock import MagicMock
 
 def create_state(user_query: str) -> dict:
     user = AuthenticatedUser(user_id=1, customer_id=1, role=UserRole.CUSTOMER)
@@ -19,11 +20,30 @@ def create_state(user_query: str) -> dict:
 def test_prepare_create_order_action():
     state = create_state("Create an order for 2 AIS-200 machines.")
 
-    result = prepare_action(state)
+    chat_model = MagicMock()
+
+    action = MagicMock()
+    item = MagicMock()
+    item.product_code = "AIS-200"
+    item.quantity = 2
+
+    action.items = [item]
+
+    chat_model.with_structured_output.return_value.invoke.return_value = action
+
+    result = prepare_action(state, chat_model=chat_model)
 
     assert result["pending_action"] is not None
     assert result["pending_action"].action_type == "create_order"
-    assert result["pending_action"].description == ("Create an order for 2 AIS-200 machines.")
+
+    assert result["pending_action"].parameters == {
+        "items": [
+            {
+                "product_code": "AIS-200",
+                "quantity": 2
+            }
+        ]
+    }
 
 
 def test_prepare_cancel_order_action():
