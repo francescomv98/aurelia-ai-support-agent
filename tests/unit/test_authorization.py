@@ -5,6 +5,7 @@ from src.security.authorization import (require_customer_access, require_role)
 from unittest.mock import MagicMock
 from src.agent.authorization import authorize_action
 from src.agent.state import PendingAction
+from src.services.exceptions import AuthorizationError, ValidationError
 
 def create_user(user_id: int = 1, customer_id: int | None = 1, role: UserRole = UserRole.CUSTOMER) -> AuthenticatedUser:
     return AuthenticatedUser(user_id=user_id, customer_id=customer_id, role=role)
@@ -19,7 +20,7 @@ def test_customer_can_access_own_customer() -> None:
 def test_customer_cannot_access_another_customer() -> None:
     user = create_user(customer_id=1, role=UserRole.CUSTOMER)
 
-    with pytest.raises(PermissionError, match="not authorized"):
+    with pytest.raises(AuthorizationError, match="not authorized"):
         require_customer_access(user, customer_id=2)
 
 
@@ -44,7 +45,7 @@ def test_allowed_role_is_accepted() -> None:
 def test_disallowed_role_is_rejected() -> None:
     user = create_user(role=UserRole.CUSTOMER)
 
-    with pytest.raises(PermissionError, match="not authorized"):
+    with pytest.raises(AuthorizationError, match="not authorized"):
         require_role(user, allowed_roles={UserRole.ADMIN})
 
 

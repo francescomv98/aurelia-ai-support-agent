@@ -1,9 +1,7 @@
 from decimal import Decimal
 import pytest
 from src.services.order_service import (CreateOrderResult, OrderItemRequest, OrderResult, create_order, get_order_status, cancel_order)
-from datetime import datetime, timezone
-from unittest.mock import patch
-from src.database.models import Order
+from src.services.exceptions import ValidationError
 
 class FakeSession:
     def __init__(self, order=None, products=None, existing_order_numbers=None):
@@ -213,14 +211,14 @@ def test_create_order_returns_failed_when_price_is_unavailable() -> None:
 def test_create_order_rejects_empty_items() -> None:
     db = FakeSession()
 
-    with pytest.raises(ValueError, match="At least one order item is required"):
+    with pytest.raises(ValidationError, match="At least one order item is required"):
         create_order(db=db, customer_id=1, items=[])
 
 
 def test_create_order_rejects_invalid_quantity() -> None:
     db = FakeSession()
 
-    with pytest.raises(ValueError, match="Order item quantity must be greater than zero"):
+    with pytest.raises(ValidationError, match="Order item quantity must be greater than zero"):
         create_order(db=db, customer_id=1,
             items=[
                 OrderItemRequest(

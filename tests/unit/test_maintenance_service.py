@@ -1,5 +1,6 @@
 import pytest
 from src.services.maintenance_service import (MaintenanceResult, calculate_maintenance_status)
+from src.services.exceptions import ValidationError
 
 
 def test_maintenance_is_not_due() -> None:
@@ -23,10 +24,10 @@ def test_maintenance_is_overdue() -> None:
 
 
 def test_negative_operating_hours_are_rejected() -> None:
-    with pytest.raises(ValueError, match="cannot be negative"):
+    with pytest.raises(ValidationError, match="cannot be negative"):
         calculate_maintenance_status(current_hours=-1, maintenance_interval=2000)
 
 
 def test_invalid_maintenance_interval_is_rejected() -> None:
-    with pytest.raises(ValueError, match="greater than zero"):
+    with pytest.raises(ValidationError, match="greater than zero"):
         calculate_maintenance_status(current_hours=1000, maintenance_interval=0)

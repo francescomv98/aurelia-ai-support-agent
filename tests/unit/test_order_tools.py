@@ -4,6 +4,7 @@ from src.auth.models import AuthenticatedUser
 from src.database.models import UserRole
 from src.services.order_service import CreateOrderResult, OrderItemRequest, CancelOrderResult
 from src.tools.order_tools import create_order_tool, cancel_order_tool
+from src.services.exceptions import AuthorizationError, ValidationError
 
 def test_create_order_tool_customer_uses_own_customer_context() -> None:
     db = Mock()
@@ -43,7 +44,7 @@ def test_create_order_tool_customer_cannot_override_customer_context() -> None:
         )
     ]
 
-    with pytest.raises(PermissionError):
+    with pytest.raises(AuthorizationError):
         create_order_tool(db=db, user=user, items=items, customer_id=2)
 
 
@@ -59,7 +60,7 @@ def test_create_order_tool_customer_without_customer_context_is_rejected() -> No
         )
     ]
 
-    with pytest.raises(PermissionError, match="Customer user is not associated with a customer"):
+    with pytest.raises(AuthorizationError, match="Customer user is not associated with a customer"):
         create_order_tool(db=db, user=user, items=items)
 
 
@@ -75,7 +76,7 @@ def test_create_order_tool_support_agent_requires_customer_id() -> None:
         )
     ]
 
-    with pytest.raises(ValueError, match="Customer ID is required for internal users"):
+    with pytest.raises(ValidationError, match="Customer ID is required for internal users"):
         create_order_tool(db=db, user=user, items=items)
 
 
@@ -159,7 +160,7 @@ def test_cancel_order_tool_customer_without_context():
 
     user = AuthenticatedUser(user_id=1, customer_id=None, role=UserRole.CUSTOMER)
 
-    with pytest.raises(PermissionError, match="not associated with a customer"):
+    with pytest.raises(AuthorizationError, match="not associated with a customer"):
         cancel_order_tool(db=db, order_id="ORD-20001", user=user)
 
 
@@ -168,7 +169,7 @@ def test_cancel_order_tool_support_agent_requires_customer_id():
 
     user = AuthenticatedUser(user_id=10, customer_id=None, role=UserRole.SUPPORT_AGENT)
 
-    with pytest.raises(ValueError, match="Customer ID is required"):
+    with pytest.raises(ValidationError, match="Customer ID is required"):
         cancel_order_tool(db=db, order_id="ORD-20001", user=user)
 
 
@@ -234,7 +235,7 @@ def test_cancel_order_tool_customer_cannot_override_customer_context() -> None:
 
     user = AuthenticatedUser(user_id=1, customer_id=1, role=UserRole.CUSTOMER)
 
-    with pytest.raises(PermissionError):
+    with pytest.raises(AuthorizationError):
         cancel_order_tool(db=db, order_id="ORD-20001", user=user, customer_id=2)
 
 
@@ -243,5 +244,5 @@ def test_cancel_order_tool_support_agent_without_customer_context_is_rejected() 
 
     user = AuthenticatedUser(user_id=10, customer_id=None, role=UserRole.SUPPORT_AGENT)
 
-    with pytest.raises(ValueError, match="Customer ID is required"):
+    with pytest.raises(ValidationError, match="Customer ID is required"):
         cancel_order_tool(db=db, order_id="ORD-20001", user=user)

@@ -10,6 +10,7 @@ from unittest.mock import MagicMock, patch
 from src.agent.graph import build_agent_graph
 from src.agent.graph import human_approval
 from langgraph.checkpoint.memory import InMemorySaver
+from src.services.exceptions import AuthorizationError, ValidationError
 
 def create_customer_user() -> AuthenticatedUser:
     return AuthenticatedUser(user_id=1, customer_id=1, role=UserRole.CUSTOMER)
@@ -56,7 +57,7 @@ def test_execute_tool_requires_customer_context() -> None:
         "response": ""
     }
 
-    with pytest.raises(PermissionError, match="Customer user has no customer context."):
+    with pytest.raises(AuthorizationError, match="Customer user has no customer context."):
         execute_tool(state=state, db=object(), rag_service=object())
 
 

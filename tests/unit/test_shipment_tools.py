@@ -4,6 +4,7 @@ from src.auth.models import AuthenticatedUser
 from src.auth.models import UserRole
 from src.services.shipment_service import ShipmentResult
 from src.tools.shipment_tools import get_shipment_tool
+from src.services.exceptions import AuthorizationError, ValidationError
 
 def test_customer_can_access_own_shipment() -> None:
     db = MagicMock()
@@ -62,7 +63,7 @@ def test_customer_without_customer_context_is_rejected() -> None:
 
     user = AuthenticatedUser(user_id=1, customer_id=None, role=UserRole.CUSTOMER)
 
-    with pytest.raises(PermissionError):
+    with pytest.raises(AuthorizationError):
         get_shipment_tool(db=db, tracking_number="SHIP-90231", user=user)
 
 
@@ -71,7 +72,7 @@ def test_support_agent_requires_target_customer() -> None:
 
     user = AuthenticatedUser(user_id=10, customer_id=None, role=UserRole.SUPPORT_AGENT)
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValidationError):
         get_shipment_tool(db=db, tracking_number="SHIP-90231", user=user)
 
 

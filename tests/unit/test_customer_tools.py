@@ -3,6 +3,7 @@ import pytest
 from src.auth.models import AuthenticatedUser, UserRole
 from src.services.customer_service import CustomerResult
 from src.tools.customer_tools import get_customer_tool
+from src.services.exceptions import AuthorizationError, ValidationError
 
 def test_customer_can_access_own_customer() -> None:
     db = MagicMock()
@@ -63,7 +64,7 @@ def test_customer_without_customer_context_is_rejected() -> None:
 
     user = AuthenticatedUser(user_id=1, customer_id=None, role=UserRole.CUSTOMER)
 
-    with pytest.raises(PermissionError):
+    with pytest.raises(AuthorizationError):
         get_customer_tool(db=db, user=user)
 
 
@@ -72,7 +73,7 @@ def test_support_agent_requires_target_customer() -> None:
 
     user = AuthenticatedUser(user_id=10, customer_id=None, role=UserRole.SUPPORT_AGENT)
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValidationError):
         get_customer_tool(db=db, user=user)
 
 

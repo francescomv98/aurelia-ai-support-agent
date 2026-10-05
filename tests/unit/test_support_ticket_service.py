@@ -1,7 +1,7 @@
 from datetime import datetime
 import pytest
 from src.services.support_ticket_service import (CreateSupportTicketResult, create_support_ticket, update_support_ticket)
-from unittest.mock import MagicMock
+from src.services.exceptions import AuthorizationError, ValidationError
 
 class FakeMachine:
     def __init__(self, machine_id=1):
@@ -137,7 +137,7 @@ def test_create_support_ticket_rejects_empty_required_fields(field):
 
     values[field] = ""
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValidationError):
         create_support_ticket(db=db, customer_id=1, **values)
 
 
@@ -210,21 +210,21 @@ def test_update_support_ticket_not_found():
 def test_update_support_ticket_requires_at_least_one_field():
     db = FakeSession(ticket=FakeSupportTicket())
 
-    with pytest.raises(ValueError, match="At least one ticket field"):
+    with pytest.raises(ValidationError, match="At least one ticket field"):
         update_support_ticket(db=db, ticket_number="TCK-5021", customer_id=1)
 
 
 def test_update_support_ticket_rejects_empty_subject():
     db = FakeSession(ticket=FakeSupportTicket())
 
-    with pytest.raises(ValueError, match="Ticket subject cannot be empty"):
+    with pytest.raises(ValidationError, match="Ticket subject cannot be empty"):
         update_support_ticket(db=db, ticket_number="TCK-5021", customer_id=1, subject="   ")
 
 
 def test_update_support_ticket_rejects_empty_description():
     db = FakeSession(ticket=FakeSupportTicket())
 
-    with pytest.raises(ValueError, match="Ticket description cannot be empty"):
+    with pytest.raises(ValidationError, match="Ticket description cannot be empty"):
         update_support_ticket(db=db, ticket_number="TCK-5021", customer_id=1, description="   ")
 
 

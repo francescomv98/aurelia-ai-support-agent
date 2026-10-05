@@ -30,10 +30,11 @@ def test_chat_rejects_empty_message() -> None:
         app.dependency_overrides.clear()
 
 
+@patch("src.api.routes.chat.get_checkpointer")
 @patch("src.api.routes.chat.build_agent_graph")
 @patch("src.api.routes.chat.create_rag_service")
 @patch("src.api.routes.chat.create_chat_model")
-def test_chat_returns_agent_response(mock_create_chat_model: MagicMock, mock_create_rag_service: MagicMock, mock_build_agent_graph: MagicMock) -> None:
+def test_chat_returns_agent_response(mock_create_chat_model: MagicMock, mock_create_rag_service: MagicMock, mock_build_agent_graph: MagicMock, mock_get_checkpointer: MagicMock) -> None:
     app.dependency_overrides[get_current_user] = override_customer_user
 
     mock_graph = MagicMock()

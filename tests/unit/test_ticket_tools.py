@@ -3,6 +3,7 @@ from src.auth.models import AuthenticatedUser
 from src.database.models import UserRole
 from src.services.ticket_service import TicketResult
 from src.tools.ticket_tools import get_machine_ticket_tool
+from src.services.exceptions import AuthorizationError, ValidationError
 
 def test_customer_can_access_own_machine_ticket(monkeypatch) -> None:
     user = AuthenticatedUser(user_id=1, customer_id=1, role=UserRole.CUSTOMER)
@@ -57,14 +58,14 @@ def test_customer_cannot_override_customer_context(monkeypatch) -> None:
 def test_customer_without_customer_context_is_rejected() -> None:
     user = AuthenticatedUser(user_id=1, customer_id=None, role=UserRole.CUSTOMER)
 
-    with pytest.raises(PermissionError, match="Customer user has no customer context."):
+    with pytest.raises(AuthorizationError, match="Customer user has no customer context."):
         get_machine_ticket_tool(db=object(), machine_serial="AIS2-2025-00142", user=user)
 
 
 def test_support_agent_requires_target_customer() -> None:
     user = AuthenticatedUser(user_id=10, customer_id=None, role=UserRole.SUPPORT_AGENT)
 
-    with pytest.raises(ValueError, match="Customer ID is required for internal users."):
+    with pytest.raises(ValidationError, match="Customer ID is required for internal users."):
         get_machine_ticket_tool(db=object(), machine_serial="AIS2-2025-00142", user=user)
 
 
