@@ -2,15 +2,19 @@ from langchain_core.documents import Document
 from src.agent.graph import determine_tool_type, execute_tool
 from src.auth.models import AuthenticatedUser
 from src.database.models import UserRole
+from src.rag.rag_service import RAGService
 from src.services.machine_service import MachineResult
 from src.services.ticket_service import TicketResult
 from src.services.shipment_service import ShipmentResult
 import pytest
 from unittest.mock import MagicMock, patch
-from src.agent.graph import build_agent_graph
-from src.agent.graph import human_approval
+from src.agent.graph import build_agent_graph, human_approval, generate_response
 from langgraph.checkpoint.memory import InMemorySaver
-from src.services.exceptions import AuthorizationError, ValidationError
+from langchain_openai import ChatOpenAI
+from src.services.exceptions import AuthorizationError, LLMError
+from src.agent.action_preparation import CreateOrderAction, OrderItem
+from src.agent.state import PendingAction
+import openai
 
 def create_customer_user() -> AuthenticatedUser:
     return AuthenticatedUser(user_id=1, customer_id=1, role=UserRole.CUSTOMER)
@@ -353,7 +357,7 @@ def test_build_agent_graph_with_checkpointer():
 def test_human_approval_requires_pending_action():
     state = {
         "user_query": "Hello",
-        "authenticated_user": MagicMock(),
+        "authenticated_user":  create_customer_user(),
         "route": "tool",
         "retrieved_context": [],
         "tool_type": "order",
@@ -372,23 +376,78 @@ def test_write_action_approved_reaches_execute_write_tool():
     route_response = MagicMock()
     route_response.route = "tool"
 
-    chat_model.with_structured_output.return_value.invoke.side_effect = [ route_response ]
+    action_response = CreateOrderAction(items=[OrderItem(product_code="PROD-200", quantity=2)])
+
+    chat_model.with_structured_output.return_value.invoke.side_effect = [ route_response, action_response ]
+    chat_model.invoke.return_value.content = "Order created successfully."
 
     rag_service = MagicMock()
     checkpointer = InMemorySaver()
     db = MagicMock()
 
-    with patch("src.agent.graph.request_human_approval", return_value="APPROVED"), patch(
-        "src.agent.graph.execute_write_tool",
-        return_value={
-            "user_query": "Create an order for 2 AIS-200 machines.",
-            "authenticated_user": MagicMock(),
-            "route": "tool",
-            "retrieved_context": [],
-            "tool_type": "order",
-            "pending_action": MagicMock(),
-            "tool_result": "Order created successfully.",
-            "response": ""
-        }) as mock_execute_write:
+    pending_action = PendingAction(
+        action_type="create_order",
+        description="Create an order for 2 AIS-200 machines.",
+        parameters={
+            "items": [
+                {
+                    "product_code": "PROD-200",
+                    "quantity": 2
+                }
+            ]
+        }
+    )
+
+    execute_write_result = {
+        "user_query": "Create an order for 2 AIS-200 machines.",
+        "authenticated_user":  create_customer_user(),
+        "route": "tool",
+        "retrieved_context": [],
+        "tool_type": "order",
+        "pending_action": pending_action,
+        "tool_result": "Order created successfully.",
+        "response": ""
+    }
+
+    with patch("src.agent.graph.request_human_approval", return_value="APPROVED"), patch("src.agent.graph.execute_write_tool", return_value=execute_write_result) as mock_execute_write:
 
         graph = build_agent_graph(chat_model=chat_model, rag_service=rag_service, db=db, checkpointer=checkpointer)
+
+        initial_state = {
+            "user_query": "Create an order for 2 AIS-200 machines.",
+            "authenticated_user": create_customer_user(),
+            "route": "rag",
+            "retrieved_context": [],
+            "tool_type": None,
+            "pending_action": None,
+            "tool_result": "",
+            "response": ""
+        }
+
+        config = { "configurable": { "thread_id": "test-write-action-approved" }}
+
+        result = graph.invoke(initial_state, config=config)
+
+    mock_execute_write.assert_called_once()
+    assert result["tool_result"] == "Order created successfully."
+
+
+def test_generate_response_maps_llm_timeout_to_llm_error() -> None:
+    chat_model = MagicMock(spec=ChatOpenAI)
+    rag_service = MagicMock(spec=RAGService)
+
+    chat_model.invoke.side_effect = openai.APITimeoutError(request=MagicMock())
+
+    state = {
+        "user_query": "What is the warranty period?",
+        "authenticated_user":  create_customer_user(),
+        "route": "rag",
+        "retrieved_context": [],
+        "tool_type": None,
+        "pending_action": None,
+        "tool_result": "",
+        "response": ""
+    }
+
+    with pytest.raises(LLMError, match="The AI service timed out."):
+        generate_response(state=state, chat_model=chat_model, rag_service=rag_service)

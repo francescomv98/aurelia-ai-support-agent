@@ -1,3 +1,5 @@
+import re
+import openai
 from typing import Literal
 from langchain_openai import ChatOpenAI
 from langgraph.graph import START, END, StateGraph
@@ -15,7 +17,6 @@ from src.tools.product_tools import get_product_tool
 from src.tools.customer_tools import get_customer_tool
 from src.tools.support_ticket_tools import (create_support_ticket_tool, update_support_ticket_tool)
 from src.services.order_service import OrderItemRequest
-import re
 from sqlalchemy import select
 from src.database.models import Customer
 from langgraph.checkpoint.postgres import PostgresSaver
@@ -23,7 +24,7 @@ from src.agent.action_preparation import prepare_action
 from src.agent.human_approval import request_human_approval
 from src.agent.authorization import authorize_action
 from sqlalchemy.exc import SQLAlchemyError
-from src.services.exceptions import DatabaseError
+from src.services.exceptions import DatabaseError, LLMError
 
 def retrieve_context(state: AgentState, rag_service: RAGService) -> AgentState:
     """Retrieve relevant documentation for the user query."""
@@ -377,7 +378,11 @@ Context:
 {context}
 """
 
-    response = chat_model.invoke(prompt)
+    try:
+        response = chat_model.invoke(prompt)
+    except openai.APITimeoutError as exc:
+        logger.exception("LLM request timed out")
+        raise LLMError("The AI service timed out.") from exc
 
     return {
         **state,
