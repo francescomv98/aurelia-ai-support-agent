@@ -78,6 +78,7 @@ def chat(request: ChatRequest, current_user: AuthenticatedUser = Depends(get_cur
             "authenticated_user": current_user,
             "route": "rag",
             "retrieved_context": [],
+            "rag_available": True,
             "tool_type": None,
             "pending_action": None,
             "tool_result": "",
@@ -86,7 +87,7 @@ def chat(request: ChatRequest, current_user: AuthenticatedUser = Depends(get_cur
 
         config = { "configurable": { "thread_id": thread_id } }
 
-        result = agent_graph.invoke(initial_state, config = config)
+        result = agent_graph.invoke(initial_state, config=config)
 
         logger.info("Chat request completed", user_id=current_user.user_id)
 

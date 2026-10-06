@@ -16,6 +16,7 @@ class AgentState(TypedDict):
     authenticated_user: AuthenticatedUser
     route: Literal["rag", "tool", "hybrid"]
     retrieved_context: list[Document]
+    rag_available: bool
     tool_type: Literal["order", "machine", "shipment", "product", "customer"] | None
     pending_action: PendingAction | None
     tool_result: str

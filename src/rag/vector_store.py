@@ -2,6 +2,8 @@ from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
 from langchain_postgres import PGVector
 from src.logging.logger import logger
+from sqlalchemy.exc import SQLAlchemyError
+from src.services.exceptions import DatabaseError
 
 class VectorStore:
     """Manage the PostgreSQL vector store."""
@@ -20,6 +22,7 @@ class VectorStore:
             self.store.add_documents(documents)
 
             logger.info("Documents added to vector store", document_count=len(documents))
+
         except Exception:
             logger.exception("Failed to add documents to vector store")
             raise
@@ -35,7 +38,10 @@ class VectorStore:
             logger.info("Vector similarity search completed", result_count=len(documents))
 
             return documents
-
+        
+        except SQLAlchemyError as exc:
+            logger.exception("Vector similarity search failed")
+            raise DatabaseError("Vector store operation failed.") from exc
         except Exception:
             logger.exception("Vector similarity search failed")
             raise

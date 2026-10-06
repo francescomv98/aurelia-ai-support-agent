@@ -11,7 +11,7 @@ from unittest.mock import MagicMock, patch
 from src.agent.graph import build_agent_graph, human_approval, generate_response
 from langgraph.checkpoint.memory import InMemorySaver
 from langchain_openai import ChatOpenAI
-from src.services.exceptions import AuthorizationError, LLMError
+from src.services.exceptions import AuthorizationError, LLMError, DatabaseError
 from src.agent.action_preparation import CreateOrderAction, OrderItem
 from src.agent.state import PendingAction
 import openai
@@ -37,6 +37,7 @@ def test_execute_tool_returns_order_result(monkeypatch) -> None:
         "user_query": "What is the status of order ORD-10245?",
         "authenticated_user": user,
         "route": "tool",
+        "rag_available": True,
         "tool_type": "order",
         "retrieved_context": [],
         "tool_result": "",
@@ -55,6 +56,7 @@ def test_execute_tool_requires_customer_context() -> None:
         "user_query": "What is the status of order ORD-10245?",
         "authenticated_user": user,
         "route": "tool",
+        "rag_available": True,
         "tool_type": "order",
         "retrieved_context": [],
         "tool_result": "",
@@ -72,6 +74,7 @@ def test_execute_tool_handles_missing_order_id() -> None:
         "user_query": "Can you check my order?",
         "authenticated_user": user,
         "route": "tool",
+        "rag_available": True,
         "tool_type": "order",
         "retrieved_context": [],
         "tool_result": "",
@@ -88,6 +91,7 @@ def test_determine_tool_type_order() -> None:
         "user_query": "What is the status of ORD-10245?",
         "authenticated_user": create_customer_user(),
         "route": "tool",
+        "rag_available": True,
         "tool_type": None,
         "retrieved_context": [],
         "tool_result": "",
@@ -106,6 +110,7 @@ def test_determine_tool_type_machine() -> None:
         ),
         "authenticated_user": create_customer_user(),
         "route": "hybrid",
+        "rag_available": True,
         "tool_type": None,
         "retrieved_context": [],
         "tool_result": "",
@@ -122,6 +127,7 @@ def test_determine_tool_type_unknown() -> None:
         "user_query": "I need help with something.",
         "authenticated_user": create_customer_user(),
         "route": "tool",
+        "rag_available": True,
         "tool_type": None,
         "retrieved_context": [],
         "tool_result": "",
@@ -169,6 +175,7 @@ def test_execute_tool_calculates_machine_maintenance(monkeypatch) -> None:
         ),
         "authenticated_user": user,
         "route": "hybrid",
+        "rag_available": True,
         "tool_type": "machine",
         "retrieved_context": [
             Document(
@@ -200,6 +207,7 @@ def test_execute_tool_finds_existing_support_ticket(monkeypatch) -> None:
         "authenticated_user": user,
         "route": "hybrid",
         "retrieved_context": [],
+        "rag_available": True,
         "tool_type": "machine",
         "tool_result": "",
         "response": ""
@@ -267,6 +275,7 @@ def test_determine_shipment_tool_type() -> None:
         ),
         "route": "tool",
         "retrieved_context": [],
+        "rag_available": True,
         "tool_type": None,
         "tool_result": "",
         "response": ""
@@ -296,6 +305,7 @@ def test_execute_shipment_tool() -> None:
         "authenticated_user": user,
         "route": "tool",
         "retrieved_context": [],
+        "rag_available": True,
         "tool_type": "shipment",
         "tool_result": "",
         "response": ""
@@ -317,6 +327,7 @@ def test_determine_product_tool():
         "authenticated_user": ...,
         "route": "tool",
         "retrieved_context": [],
+        "rag_available": True,
         "tool_type": None,
         "tool_result": "",
         "response": ""
@@ -333,6 +344,7 @@ def test_determine_customer_tool():
         "authenticated_user": ...,
         "route": "tool",
         "retrieved_context": [],
+        "rag_available": True,
         "tool_type": None,
         "tool_result": "",
         "response": ""
@@ -360,6 +372,7 @@ def test_human_approval_requires_pending_action():
         "authenticated_user":  create_customer_user(),
         "route": "tool",
         "retrieved_context": [],
+        "rag_available": True,
         "tool_type": "order",
         "pending_action": None,
         "tool_result": "",
@@ -403,6 +416,7 @@ def test_write_action_approved_reaches_execute_write_tool():
         "authenticated_user":  create_customer_user(),
         "route": "tool",
         "retrieved_context": [],
+        "rag_available": True,
         "tool_type": "order",
         "pending_action": pending_action,
         "tool_result": "Order created successfully.",
@@ -418,6 +432,7 @@ def test_write_action_approved_reaches_execute_write_tool():
             "authenticated_user": create_customer_user(),
             "route": "rag",
             "retrieved_context": [],
+            "rag_available": True,
             "tool_type": None,
             "pending_action": None,
             "tool_result": "",
@@ -443,6 +458,7 @@ def test_generate_response_maps_llm_timeout_to_llm_error() -> None:
         "authenticated_user":  create_customer_user(),
         "route": "rag",
         "retrieved_context": [],
+        "rag_available": True,
         "tool_type": None,
         "pending_action": None,
         "tool_result": "",
@@ -451,3 +467,136 @@ def test_generate_response_maps_llm_timeout_to_llm_error() -> None:
 
     with pytest.raises(LLMError, match="The AI service timed out."):
         generate_response(state=state, chat_model=chat_model, rag_service=rag_service)
+
+
+def test_rag_only_request_degrades_when_rag_is_unavailable():
+    chat_model = MagicMock(spec=ChatOpenAI)
+    rag_service = MagicMock(spec=RAGService)
+    rag_service.retrieve_context.side_effect = DatabaseError("Vector store operation failed.")
+
+    checkpointer = InMemorySaver()
+    db = MagicMock()
+
+    with patch("src.agent.graph.route_request") as mock_route:
+        mock_route.return_value = {
+            "user_query": "What is the warranty period?",
+            "authenticated_user": create_customer_user(),
+            "route": "rag",
+            "retrieved_context": [],
+            "rag_available": True,
+            "tool_type": None,
+            "pending_action": None,
+            "tool_result": "",
+            "response": ""
+        }
+
+        graph = build_agent_graph(chat_model=chat_model, rag_service=rag_service, db=db, checkpointer=checkpointer)
+
+        initial_state = {
+            "user_query": "What is the warranty period?",
+            "authenticated_user": create_customer_user(),
+            "route": "rag",
+            "retrieved_context": [],
+            "rag_available": True,
+            "tool_type": None,
+            "pending_action": None,
+            "tool_result": "",
+            "response": ""
+        }
+
+        result = graph.invoke(initial_state, config={"configurable": {"thread_id": "test-rag-degradation"}})
+
+    assert result["rag_available"] is False
+    assert result["retrieved_context"] == []
+    assert result["response"] == "I'm sorry, but the documentation service is currently unavailable. Please try again later."
+    chat_model.invoke.assert_not_called()
+
+
+def test_rag_only_request_returns_fallback_when_rag_is_unavailable():
+    chat_model = MagicMock(spec=ChatOpenAI)
+    rag_service = MagicMock(spec=RAGService)
+    rag_service.retrieve_context.side_effect = DatabaseError("Vector store operation failed.")
+
+    checkpointer = InMemorySaver()
+    db = MagicMock()
+
+    route_response = MagicMock()
+    route_response.route = "rag"
+
+    chat_model.with_structured_output.return_value.invoke.return_value = route_response
+
+    graph = build_agent_graph(chat_model=chat_model, rag_service=rag_service, db=db, checkpointer=checkpointer)
+
+    initial_state = {
+        "user_query": "What is the warranty period?",
+        "authenticated_user": create_customer_user(),
+        "route": "rag",
+        "retrieved_context": [],
+        "rag_available": True,
+        "tool_type": None,
+        "pending_action": None,
+        "tool_result": "",
+        "response": ""
+    }
+
+    result = graph.invoke(initial_state, config={"configurable": {"thread_id": "test-rag-only-degradation"}})
+
+    assert result["route"] == "rag"
+    assert result["rag_available"] is False
+    assert result["retrieved_context"] == []
+    assert result["response"] == "I'm sorry, but the documentation service is currently unavailable. Please try again later."
+
+    rag_service.retrieve_context.assert_called_once_with("What is the warranty period?")
+    chat_model.invoke.assert_not_called()
+
+
+def test_hybrid_request_executes_tool_when_rag_is_unavailable():
+    chat_model = MagicMock(spec=ChatOpenAI)
+    rag_service = MagicMock(spec=RAGService)
+    rag_service.retrieve_context.side_effect = DatabaseError("Vector store operation failed.")
+    rag_service.extract_maintenance_interval.return_value = None
+
+    checkpointer = InMemorySaver()
+    db = MagicMock()
+
+    route_response = MagicMock()
+    route_response.route = "hybrid"
+
+    chat_model.with_structured_output.return_value.invoke.return_value = route_response
+    chat_model.invoke.return_value.content = "Maintenance information is currently unavailable."
+
+    machine_result = MachineResult(
+        status="FOUND",
+        message=("Machine AIS2-2025-00142 is an AIS-200 machine with 1734 operating hours."),
+        machine_serial="AIS2-2025-00142",
+        model="AIS-200",
+        operating_hours=1734
+    )
+
+    with patch("src.agent.graph.get_machine_tool", return_value=machine_result) as mock_machine_tool:
+        graph = build_agent_graph(chat_model=chat_model, rag_service=rag_service, db=db, checkpointer=checkpointer)
+
+        initial_state = {
+            "user_query": "When does machine AIS2-2025-00142 need maintenance?",
+            "authenticated_user": create_customer_user(),
+            "route": "rag",
+            "retrieved_context": [],
+            "rag_available": True,
+            "tool_type": None,
+            "pending_action": None,
+            "tool_result": "",
+            "response": ""
+        }
+
+        result = graph.invoke(initial_state, config={"configurable": {"thread_id": "test-hybrid-rag-degradation"}})
+
+    assert result["route"] == "hybrid"
+    assert result["rag_available"] is False
+    assert result["retrieved_context"] == []
+
+    mock_machine_tool.assert_called_once_with(db=db, machine_serial="AIS2-2025-00142", user=initial_state["authenticated_user"])
+
+    assert "Machine AIS2-2025-00142" in result["tool_result"]
+    assert "maintenance interval could not be determined" in result["tool_result"]
+
+    chat_model.invoke.assert_called_once()

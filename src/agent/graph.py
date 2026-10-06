@@ -29,12 +29,21 @@ from src.services.exceptions import DatabaseError, LLMError
 def retrieve_context(state: AgentState, rag_service: RAGService) -> AgentState:
     """Retrieve relevant documentation for the user query."""
     logger.info("Retrieving context", query_length=len(state["user_query"]))
-
-    context = rag_service.retrieve_context(state["user_query"])
+    
+    try:
+        context = rag_service.retrieve_context(state["user_query"])
+    except DatabaseError:
+        logger.exception("RAG retrieval unavailable")
+        return {
+            **state,
+            "retrieved_context": [],
+            "rag_available": False
+        }
 
     return {
         **state,
-        "retrieved_context": context
+        "retrieved_context": context,
+        "rag_available": True
     }
 
 
@@ -343,6 +352,14 @@ def generate_response(state: AgentState, chat_model: ChatOpenAI, rag_service: RA
     logger.info("Generating agent response")
 
     context_sections = []
+
+    if state["route"] == "rag" and not state["rag_available"]:
+        logger.warning("RAG unavailable for RAG-only request")
+
+        return {
+            **state,
+            "response": ("I'm sorry, but the documentation service is currently unavailable. Please try again later.")
+        }
 
     if state["retrieved_context"]:
         documentation_context = rag_service.build_context(state["retrieved_context"])

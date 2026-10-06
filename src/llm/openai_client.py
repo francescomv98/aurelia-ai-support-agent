@@ -10,9 +10,9 @@ def create_chat_model() -> ChatOpenAI:
         raise RuntimeError("OPENAI_API_KEY environment variable is not set.")
 
     model_name = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-
     timeout = float(os.getenv("OPENAI_TIMEOUT_SECONDS", "30"))
+    max_retries = int(os.getenv("OPENAI_MAX_RETRIES", "2"))
 
-    logger.info("Initializing chat model", model=model_name, timeout_seconds=timeout)
+    logger.info("Initializing chat model", model=model_name, timeout_seconds=timeout, max_retries=max_retries)
 
-    return ChatOpenAI(model=model_name, temperature=0, timeout=timeout)
+    return ChatOpenAI(model=model_name, temperature=0, timeout=timeout, max_retries=max_retries)
