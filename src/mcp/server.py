@@ -5,6 +5,7 @@ from src.services.customer_service import get_customer
 from src.services.shipment_service import get_shipment
 from src.services.machine_service import get_machine
 from src.services.maintenance_service import get_maintenance_history
+from src.services.ticket_service import get_machine_ticket
 
 mcp = MCPServer(
     name="Aurelia Support MCP Server",
@@ -84,6 +85,17 @@ def get_maintenance_history_tool(machine_serial: str, customer_id: int) -> str:
 
         return result.message
 
+    finally:
+        db.close()
+
+
+@mcp.tool()
+def get_support_ticket_tool(machine_serial: str, customer_id: int) -> str:
+    """Retrieve the support ticket for a customer's machine."""
+    db = SessionLocal()
+    try:
+        result = get_machine_ticket(db=db, machine_serial=machine_serial, customer_id=customer_id)
+        return result.message
     finally:
         db.close()
 

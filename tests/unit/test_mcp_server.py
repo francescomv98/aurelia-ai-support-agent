@@ -2,12 +2,14 @@ from unittest.mock import MagicMock, patch
 import pytest
 from src.services.exceptions import DatabaseError
 from datetime import datetime
-from src.mcp.server import (get_customer_tool, get_machine_status_tool, get_order_status_tool, track_shipment_tool, get_maintenance_history_tool)
+from src.mcp.server import (get_customer_tool, get_machine_status_tool, get_order_status_tool, track_shipment_tool, get_maintenance_history_tool,
+                            get_support_ticket_tool)
 from src.services.machine_service import MachineResult
 from src.services.shipment_service import ShipmentResult
 from src.services.customer_service import CustomerResult
 from src.services.order_service import OrderResult
 from src.services.maintenance_service import MaintenanceHistoryResult
+from src.services.ticket_service import TicketResult
 
 @patch("src.mcp.server.SessionLocal")
 @patch("src.mcp.server.get_order_status")
@@ -303,3 +305,54 @@ def test_get_maintenance_history_tool_propagates_database_error(mock_get_mainten
         get_maintenance_history_tool(machine_serial="AIS2-2025-00142", customer_id=1)
 
     db.close.assert_called_once()
+
+
+def test_get_support_ticket_tool_returns_ticket() -> None:
+    mock_db = MagicMock()
+
+    result = TicketResult(
+        status="FOUND",
+        ticket_number="TCK-5021",
+        category="TECHNICAL",
+        priority="P2",
+        ticket_status="IN_PROGRESS",
+        subject="Cooling system temperature issue",
+        message="Support ticket TCK-5021 exists for machine AIS2-2025-00142."
+    )
+
+    with patch("src.mcp.server.SessionLocal", return_value=mock_db), patch("src.mcp.server.get_machine_ticket", return_value=result) as mock_get_ticket:
+
+        response = get_support_ticket_tool(machine_serial="AIS2-2025-00142", customer_id=1)
+
+    assert response == result.message
+
+    mock_get_ticket.assert_called_once_with(db=mock_db, machine_serial="AIS2-2025-00142", customer_id=1)
+
+    mock_db.close.assert_called_once()
+
+
+def test_get_support_ticket_tool_returns_not_found() -> None:
+    mock_db = MagicMock()
+
+    result = TicketResult(
+        status="NOT_FOUND",
+        message="No support ticket was found for this machine."
+    )
+
+    with patch("src.mcp.server.SessionLocal", return_value=mock_db), patch("src.mcp.server.get_machine_ticket", return_value=result):
+
+        response = get_support_ticket_tool(machine_serial="UNKNOWN-001", customer_id=1)
+
+    assert response == "No support ticket was found for this machine."
+    mock_db.close.assert_called_once()
+
+
+def test_get_support_ticket_tool_propagates_database_error() -> None:
+    mock_db = MagicMock()
+
+    with patch("src.mcp.server.SessionLocal", return_value=mock_db), patch("src.mcp.server.get_machine_ticket", side_effect=DatabaseError("Database operation failed.")):
+
+        with pytest.raises(DatabaseError, match="Database operation failed."):
+            get_support_ticket_tool(machine_serial="AIS2-2025-00142", customer_id=1)
+
+    mock_db.close.assert_called_once()
