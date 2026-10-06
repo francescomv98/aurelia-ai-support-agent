@@ -3,14 +3,15 @@ import pytest
 from src.services.exceptions import DatabaseError, ValidationError
 from datetime import datetime
 from src.mcp.server import (get_customer_tool, get_machine_status_tool, get_order_status_tool, track_shipment_tool, get_maintenance_history_tool,
-                            get_support_ticket_tool, create_order_tool)
+    get_support_ticket_tool, create_order_tool, cancel_order_tool, create_support_ticket_tool, update_support_ticket_tool)
 from src.services.machine_service import MachineResult
 from src.services.shipment_service import ShipmentResult
 from src.services.customer_service import CustomerResult
 from src.services.order_service import OrderResult
 from src.services.maintenance_service import MaintenanceHistoryResult
 from src.services.ticket_service import TicketResult
-from src.services.order_service import CreateOrderResult, OrderItemRequest
+from src.services.order_service import CreateOrderResult, OrderItemRequest, CancelOrderResult
+from src.services.support_ticket_service import CreateSupportTicketResult, UpdateSupportTicketResult
 
 @patch("src.mcp.server.SessionLocal")
 @patch("src.mcp.server.get_order_status")
@@ -473,5 +474,187 @@ def test_create_order_tool_propagates_database_error() -> None:
                     }
                 ]
             )
+
+    mock_db.close.assert_called_once()
+
+
+def test_cancel_order_tool_returns_cancelled_order() -> None:
+    mock_db = MagicMock()
+
+    result = CancelOrderResult(
+        status="CANCELLED",
+        order_number="ORD-10242",
+        message="Order ORD-10242 was cancelled successfully."
+    )
+
+    with patch("src.mcp.server.SessionLocal", return_value=mock_db), patch("src.mcp.server.cancel_order", return_value=result) as mock_cancel_order:
+
+        response = cancel_order_tool(order_id="ORD-10242", customer_id=2)
+
+    assert response == result.message
+
+    mock_cancel_order.assert_called_once_with(db=mock_db, order_id="ORD-10242", customer_id=2)
+
+    mock_db.close.assert_called_once()
+
+
+def test_cancel_order_tool_returns_not_found() -> None:
+    mock_db = MagicMock()
+
+    result = CancelOrderResult(
+        status="NOT_FOUND",
+        order_number=None,
+        message="Order not found."
+    )
+
+    with patch("src.mcp.server.SessionLocal", return_value=mock_db), patch("src.mcp.server.cancel_order", return_value=result):
+
+        response = cancel_order_tool(order_id="ORD-99999", customer_id=2)
+
+    assert response == "Order not found."
+    mock_db.close.assert_called_once()
+
+
+def test_cancel_order_tool_returns_not_cancellable() -> None:
+    mock_db = MagicMock()
+
+    result = CancelOrderResult(
+        status="NOT_CANCELLABLE",
+        order_number="ORD-10241",
+        message="Order ORD-10241 cannot be cancelled because it is currently DELIVERED."        
+    )
+
+    with patch("src.mcp.server.SessionLocal", return_value=mock_db), patch("src.mcp.server.cancel_order", return_value=result):
+        response = cancel_order_tool(order_id="ORD-10241", customer_id=1)
+
+    assert response == result.message
+    mock_db.close.assert_called_once()
+
+
+def test_cancel_order_tool_propagates_database_error() -> None:
+    mock_db = MagicMock()
+
+    with patch("src.mcp.server.SessionLocal", return_value=mock_db), patch("src.mcp.server.cancel_order", side_effect=DatabaseError("Database operation failed.")):
+
+        with pytest.raises(DatabaseError, match="Database operation failed"):
+            cancel_order_tool(order_id="ORD-10242", customer_id=2)
+
+    mock_db.close.assert_called_once()
+
+
+def test_create_support_ticket_tool_returns_created_ticket() -> None:
+    mock_db = MagicMock()
+
+    result = CreateSupportTicketResult(
+        status="CREATED",
+        ticket_number="TCK-5048",
+        message="Support ticket TCK-5048 was created successfully."
+    )
+
+    with patch("src.mcp.server.SessionLocal", return_value=mock_db), patch("src.mcp.server.create_support_ticket", return_value=result) as mock_create_ticket:
+
+        response = create_support_ticket_tool(customer_id=1, category="TECHNICAL", priority="P2", subject="Cooling system issue", description="The machine reports a cooling system temperature warning.", machine_id=1)
+
+    assert response == result.message
+
+    mock_create_ticket.assert_called_once_with(db=mock_db, customer_id=1, category="TECHNICAL", priority="P2", subject="Cooling system issue", description="The machine reports a cooling system temperature warning.", machine_id=1)
+
+    mock_db.close.assert_called_once()
+
+
+def test_create_support_ticket_tool_allows_ticket_without_machine() -> None:
+    mock_db = MagicMock()
+
+    result = CreateSupportTicketResult(
+        status="CREATED",
+        ticket_number="TCK-5049",
+        message="Support ticket TCK-5049 was created successfully."
+    )
+
+    with patch("src.mcp.server.SessionLocal", return_value=mock_db), patch("src.mcp.server.create_support_ticket", return_value=result) as mock_create_ticket:
+
+        response = create_support_ticket_tool(customer_id=1, category="ORDER", priority="P3", subject="Order question", description="I have a question about my order.")
+
+    assert response == result.message
+
+    mock_create_ticket.assert_called_once_with(db=mock_db, customer_id=1, category="ORDER", priority="P3", subject="Order question", description="I have a question about my order.", machine_id=None)
+
+    mock_db.close.assert_called_once()
+
+
+def test_create_support_ticket_tool_propagates_validation_error() -> None:
+    mock_db = MagicMock()
+
+    with patch("src.mcp.server.SessionLocal", return_value=mock_db), patch("src.mcp.server.create_support_ticket", side_effect=ValidationError("Ticket subject is required.")):
+
+        with pytest.raises(ValidationError, match="Ticket subject is required"):
+            create_support_ticket_tool(customer_id=1, category="TECHNICAL", priority="P2", subject="", description="Cooling system issue.")
+
+    mock_db.close.assert_called_once()
+
+
+def test_create_support_ticket_tool_propagates_database_error() -> None:
+    mock_db = MagicMock()
+
+    with patch("src.mcp.server.SessionLocal", return_value=mock_db), patch("src.mcp.server.create_support_ticket", side_effect=DatabaseError("Database operation failed.")):
+
+        with pytest.raises(DatabaseError, match="Database operation failed"):
+            create_support_ticket_tool(customer_id=1, category="TECHNICAL", priority="P2", subject="Cooling system issue", description="Cooling system temperature warning.")
+
+    mock_db.close.assert_called_once()
+
+
+def test_update_support_ticket_tool_returns_updated_ticket() -> None:
+    mock_db = MagicMock()
+    result = UpdateSupportTicketResult(
+        status="UPDATED",
+        ticket_number="TCK-5043",
+        message="Support ticket TCK-5043 was updated successfully."
+    )
+
+    with patch("src.mcp.server.SessionLocal", return_value=mock_db), patch("src.mcp.server.update_support_ticket", return_value=result) as mock_update_ticket:
+        response = update_support_ticket_tool(ticket_number="TCK-5043", customer_id=1, priority="P2")
+
+    assert response == result.message
+
+    mock_update_ticket.assert_called_once_with(db=mock_db, ticket_number="TCK-5043", customer_id=1, status=None, priority="P2", subject=None, description=None)
+
+    mock_db.close.assert_called_once()
+
+
+def test_update_support_ticket_tool_returns_not_found() -> None:
+    mock_db = MagicMock()
+    result = UpdateSupportTicketResult(
+        status="NOT_FOUND",
+        ticket_number=None,
+        message="Support ticket not found."
+    )
+
+    with patch("src.mcp.server.SessionLocal", return_value=mock_db), patch("src.mcp.server.update_support_ticket", return_value=result) as mock_update_ticket:
+        response = update_support_ticket_tool(ticket_number="TCK-9999", customer_id=1, status="RESOLVED")
+
+    assert response == result.message
+
+    mock_update_ticket.assert_called_once_with(db=mock_db, ticket_number="TCK-9999", customer_id=1, status="RESOLVED", priority=None, subject=None, description=None)
+
+    mock_db.close.assert_called_once()
+
+
+def test_update_support_ticket_tool_propagates_validation_error() -> None:
+    mock_db = MagicMock()
+
+    with patch("src.mcp.server.SessionLocal", return_value=mock_db), patch("src.mcp.server.update_support_ticket", side_effect=ValidationError("At least one ticket field must be provided for update.")):
+        with pytest.raises(ValidationError, match="At least one ticket field must be provided for update"):
+            update_support_ticket_tool(ticket_number="TCK-5043", customer_id=1)
+
+    mock_db.close.assert_called_once()
+
+
+def test_update_support_ticket_tool_propagates_database_error() -> None:
+    mock_db = MagicMock()
+
+    with patch("src.mcp.server.SessionLocal", return_value=mock_db), patch("src.mcp.server.update_support_ticket", side_effect=DatabaseError("Database operation failed.")):
+        with pytest.raises(DatabaseError, match="Database operation failed"):
+            update_support_ticket_tool(ticket_number="TCK-5043", customer_id=1, status="RESOLVED")
 
     mock_db.close.assert_called_once()
