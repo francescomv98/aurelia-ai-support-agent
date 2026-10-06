@@ -32,6 +32,7 @@ def test_agent_graph_persists_checkpoint():
         "authenticated_user": user,
         "route": "rag",
         "retrieved_context": [],
+        "rag_available": True,
         "tool_type": None,
         "pending_action": None,
         "tool_result": "",

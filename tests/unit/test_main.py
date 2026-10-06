@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 from main import app
+from src.security.rate_limiter import RateLimiter
 from src.services.exceptions import (ApplicationError, AuthorizationError, DatabaseError, ExternalServiceError, LLMError, ValidationError)
 
 client = TestClient(app, raise_server_exceptions=False)
@@ -80,3 +81,19 @@ def test_unexpected_error_returns_500():
 
     assert response.status_code == 500
     assert response.json() == {"detail": "An internal server error occurred."}
+
+
+def test_rate_limit_returns_429_when_limit_is_exceeded():
+    app.state.rate_limiter = RateLimiter(max_requests=2, window_seconds=60)
+
+    client = TestClient(app, raise_server_exceptions=False)
+
+    first_response = client.get("/docs")
+    second_response = client.get("/docs")
+    third_response = client.get("/docs")
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 200
+    assert third_response.status_code == 429
+
+    assert third_response.json() == {"detail": "Too many requests. Please try again later."}

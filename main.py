@@ -1,3 +1,5 @@
+import os
+from src.security.rate_limiter import RateLimiter
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 from src.api.routes.auth import router as auth_router
@@ -11,6 +13,11 @@ app = FastAPI(
     title="Aurelia AI Support Agent",
     description="Enterprise AI support agent for Aurelia Industrial Systems.",
     version="0.1.0"
+)
+
+app.state.rate_limiter = RateLimiter(
+    max_requests=int(os.getenv("RATE_LIMIT_REQUESTS", "30")),
+    window_seconds=int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60"))
 )
 
 
@@ -82,6 +89,24 @@ async def unexpected_error_handler(request: Request, exc: Exception) -> JSONResp
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={"detail": "An internal server error occurred."}
     )
+
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    """Apply rate limiting to incoming HTTP requests."""
+    client_host = request.client.host if request.client else "unknown"
+
+    if not app.state.rate_limiter.is_allowed(client_host):
+        logger.warning("Rate limit exceeded", client=client_host, path=request.url.path, method=request.method)
+
+        return JSONResponse(
+            status_code=429,
+            content={
+                "detail": "Too many requests. Please try again later."
+            }
+        )
+
+    return await call_next(request)
 
 
 app.include_router(auth_router)

@@ -43,6 +43,7 @@ def test_create_order_through_agent_workflow() -> None:
             "authenticated_user": user,
             "route": "tool",
             "retrieved_context": [],
+            "rag_available": True,
             "tool_type": None,
             "pending_action": None,
             "tool_result": "",
