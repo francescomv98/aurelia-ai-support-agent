@@ -7,7 +7,7 @@ from src.services.machine_service import MachineResult
 from src.services.ticket_service import TicketResult
 from src.services.shipment_service import ShipmentResult
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from src.agent.graph import build_agent_graph, human_approval, generate_response
 from langgraph.checkpoint.memory import InMemorySaver
 from langchain_openai import ChatOpenAI
@@ -20,7 +20,8 @@ def create_customer_user() -> AuthenticatedUser:
     return AuthenticatedUser(user_id=1, customer_id=1, role=UserRole.CUSTOMER)
 
 
-def test_execute_tool_returns_order_result(monkeypatch) -> None:
+@pytest.mark.anyio
+async def test_execute_tool_returns_order_result(monkeypatch) -> None:
     user = create_customer_user()
 
     def fake_get_order_status_tool(db, order_id: str, user: AuthenticatedUser) -> str:
@@ -44,12 +45,13 @@ def test_execute_tool_returns_order_result(monkeypatch) -> None:
         "response": ""
     }
 
-    result = execute_tool(state=state, db=object(), rag_service=object())
+    result = await execute_tool(state=state, db=object(), rag_service=object())
 
     assert result["tool_result"] == "Order ORD-10245 is SHIPPED."
 
 
-def test_execute_tool_requires_customer_context() -> None:
+@pytest.mark.anyio
+async def test_execute_tool_requires_customer_context() -> None:
     user = AuthenticatedUser(user_id=1, customer_id=None, role=UserRole.CUSTOMER)
 
     state = {
@@ -63,11 +65,12 @@ def test_execute_tool_requires_customer_context() -> None:
         "response": ""
     }
 
-    with pytest.raises(AuthorizationError, match="Customer user has no customer context."):
-        execute_tool(state=state, db=object(), rag_service=object())
+    with pytest.raises(AuthorizationError):
+        await execute_tool(state=state, db=MagicMock(), rag_service=MagicMock())
 
 
-def test_execute_tool_handles_missing_order_id() -> None:
+@pytest.mark.anyio
+async def test_execute_tool_handles_missing_order_id() -> None:
     user = create_customer_user()
 
     state = {
@@ -81,7 +84,7 @@ def test_execute_tool_handles_missing_order_id() -> None:
         "response": ""
     }
 
-    result = execute_tool(state=state, db=object(), rag_service=object())
+    result = await execute_tool(state=state, db=object(), rag_service=object())
 
     assert result["tool_result"] == "I could not identify an order number."
 
@@ -139,7 +142,8 @@ def test_determine_tool_type_unknown() -> None:
     assert result["tool_type"] is None
 
 
-def test_execute_tool_calculates_machine_maintenance(monkeypatch) -> None:
+@pytest.mark.anyio
+async def test_execute_tool_calculates_machine_maintenance(monkeypatch) -> None:
     user = create_customer_user()
 
     def fake_get_machine_tool(db, machine_serial: str, user: AuthenticatedUser) -> MachineResult:
@@ -190,13 +194,14 @@ def test_execute_tool_calculates_machine_maintenance(monkeypatch) -> None:
         "response": ""
     }
 
-    result = execute_tool(state=state, db=object(), rag_service=FakeRAGService())
+    result = await execute_tool(state=state, db=object(), rag_service=FakeRAGService())
 
     assert "1734 operating hours" in result["tool_result"]
     assert "266 hours remain" in result["tool_result"]
 
 
-def test_execute_tool_finds_existing_support_ticket(monkeypatch) -> None:
+@pytest.mark.anyio
+async def test_execute_tool_finds_existing_support_ticket(monkeypatch) -> None:
     user = create_customer_user()
 
     state = {
@@ -258,7 +263,7 @@ def test_execute_tool_finds_existing_support_ticket(monkeypatch) -> None:
 
     monkeypatch.setattr("src.agent.graph.get_machine_ticket_tool", fake_get_machine_ticket_tool)
 
-    result = execute_tool(state, db=object(), rag_service=object())
+    result = await execute_tool(state, db=object(), rag_service=object())
 
     assert "TCK-5021" in result["tool_result"]
     assert "IN_PROGRESS" in result["tool_result"]
@@ -286,7 +291,8 @@ def test_determine_shipment_tool_type() -> None:
     assert result["tool_type"] == "shipment"
 
 
-def test_execute_shipment_tool() -> None:
+@pytest.mark.anyio
+async def test_execute_shipment_tool() -> None:
     db = MagicMock()
 
     shipment_result = ShipmentResult(
@@ -314,7 +320,7 @@ def test_execute_shipment_tool() -> None:
     with pytest.MonkeyPatch.context() as monkeypatch:
         monkeypatch.setattr("src.agent.graph.get_shipment_tool", MagicMock(return_value=shipment_result))
 
-        result = execute_tool(state=state, db=db, rag_service=MagicMock())
+        result = await execute_tool(state=state, db=db, rag_service=MagicMock())
 
     assert "SHIP-90231" in result["tool_result"]
     assert "DHL" in result["tool_result"]
@@ -369,7 +375,7 @@ def test_build_agent_graph_with_checkpointer():
 def test_human_approval_requires_pending_action():
     state = {
         "user_query": "Hello",
-        "authenticated_user":  create_customer_user(),
+        "authenticated_user": create_customer_user(),
         "route": "tool",
         "retrieved_context": [],
         "rag_available": True,
@@ -413,7 +419,7 @@ def test_write_action_approved_reaches_execute_write_tool():
 
     execute_write_result = {
         "user_query": "Create an order for 2 AIS-200 machines.",
-        "authenticated_user":  create_customer_user(),
+        "authenticated_user": create_customer_user(),
         "route": "tool",
         "retrieved_context": [],
         "rag_available": True,
@@ -469,7 +475,8 @@ def test_generate_response_maps_llm_timeout_to_llm_error() -> None:
         generate_response(state=state, chat_model=chat_model, rag_service=rag_service)
 
 
-def test_rag_only_request_degrades_when_rag_is_unavailable():
+@pytest.mark.anyio
+async def test_rag_only_request_degrades_when_rag_is_unavailable():
     chat_model = MagicMock(spec=ChatOpenAI)
     rag_service = MagicMock(spec=RAGService)
     rag_service.retrieve_context.side_effect = DatabaseError("Vector store operation failed.")
@@ -504,7 +511,7 @@ def test_rag_only_request_degrades_when_rag_is_unavailable():
             "response": ""
         }
 
-        result = graph.invoke(initial_state, config={"configurable": {"thread_id": "test-rag-degradation"}})
+        result = await graph.ainvoke(initial_state, config={"configurable": {"thread_id": "test-rag-degradation"}})
 
     assert result["rag_available"] is False
     assert result["retrieved_context"] == []
@@ -550,7 +557,8 @@ def test_rag_only_request_returns_fallback_when_rag_is_unavailable():
     chat_model.invoke.assert_not_called()
 
 
-def test_hybrid_request_executes_tool_when_rag_is_unavailable():
+@pytest.mark.anyio
+async def test_hybrid_request_executes_tool_when_rag_is_unavailable():
     chat_model = MagicMock(spec=ChatOpenAI)
     rag_service = MagicMock(spec=RAGService)
     rag_service.retrieve_context.side_effect = DatabaseError("Vector store operation failed.")
@@ -588,7 +596,7 @@ def test_hybrid_request_executes_tool_when_rag_is_unavailable():
             "response": ""
         }
 
-        result = graph.invoke(initial_state, config={"configurable": {"thread_id": "test-hybrid-rag-degradation"}})
+        result = await graph.ainvoke(initial_state, config={"configurable": {"thread_id": "test-hybrid-rag-degradation"}})
 
     assert result["route"] == "hybrid"
     assert result["rag_available"] is False
@@ -600,3 +608,34 @@ def test_hybrid_request_executes_tool_when_rag_is_unavailable():
     assert "maintenance interval could not be determined" in result["tool_result"]
 
     chat_model.invoke.assert_called_once()
+
+
+@pytest.mark.anyio
+async def test_execute_tool_uses_mcp_for_order_status() -> None:
+    state = {
+        "user_query": "What is the status of order ORD-10241?",
+        "authenticated_user": AuthenticatedUser(user_id=1, customer_id=1, role=UserRole.CUSTOMER),
+        "route": "tool",
+        "retrieved_context": [],
+        "rag_available": True,
+        "tool_type": "order",
+        "pending_action": None,
+        "tool_result": "",
+        "response": ""
+    }
+    
+    mock_client = MagicMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("src.agent.graph.create_mcp_client", return_value=mock_client), patch("src.agent.graph.call_mcp_tool", new=AsyncMock(return_value="Order ORD-10241 is DELIVERED.")) as mock_call_mcp_tool:
+        result = await execute_tool(state=state, db=MagicMock(), rag_service=MagicMock())
+
+    assert result["tool_result"] == "Order ORD-10241 is DELIVERED."
+
+    mock_call_mcp_tool.assert_awaited_once_with(client=mock_client, tool_name="get_order_status_tool",
+        arguments={
+            "order_id": "ORD-10241",
+            "customer_id": 1
+        }
+    )

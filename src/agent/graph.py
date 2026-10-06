@@ -24,7 +24,8 @@ from src.agent.action_preparation import prepare_action
 from src.agent.human_approval import request_human_approval
 from src.agent.authorization import authorize_action
 from sqlalchemy.exc import SQLAlchemyError
-from src.services.exceptions import DatabaseError, LLMError
+from src.services.exceptions import DatabaseError, LLMError, AuthorizationError
+from src.mcp.client import create_mcp_client, call_mcp_tool
 
 def retrieve_context(state: AgentState, rag_service: RAGService) -> AgentState:
     """Retrieve relevant documentation for the user query."""
@@ -92,7 +93,7 @@ def human_approval(state: AgentState) -> AgentState:
     }
 
 
-def execute_tool(state: AgentState, db: Session, rag_service: RAGService) -> AgentState:
+async def execute_tool(state: AgentState, db: Session, rag_service: RAGService) -> AgentState:
     """Execute the enterprise tool selected for the request."""
     logger.info("Executing agent tool", tool_type=state["tool_type"])
 
@@ -111,10 +112,19 @@ def execute_tool(state: AgentState, db: Session, rag_service: RAGService) -> Age
         if order_id is None:
             return {
                 **state,
-                "tool_result": ("I could not identify an order number.")
+                "tool_result": "I could not identify an order number."
             }
 
-        result = get_order_status_tool(db=db, order_id=order_id, user=user)
+        if user.customer_id is None:
+            raise AuthorizationError("Customer user has no customer context.")
+
+        async with create_mcp_client() as client:
+            result = await call_mcp_tool(client=client, tool_name="get_order_status_tool",
+                arguments={
+                    "order_id": order_id,
+                    "customer_id": user.customer_id
+                }
+            )
 
         return {
             **state,
@@ -415,9 +425,16 @@ def route_after_retrieval(state: AgentState) -> Literal["generate_response", "de
     return "determine_tool_type"
 
 
+async def execute_tool_node(state: AgentState, db: Session, rag_service: RAGService) -> AgentState:
+    return await execute_tool(state, db, rag_service)
+
+
 def build_agent_graph(chat_model: ChatOpenAI, rag_service: RAGService, db: Session, checkpointer: PostgresSaver):
     """Build the Aurelia support agent graph."""
 
+    async def execute_tool_graph_node(state: AgentState) -> AgentState:
+        return await execute_tool_node(state, db, rag_service)
+    
     graph = StateGraph(AgentState)
 
     graph.add_node("route_request", lambda state: route_request(state, chat_model))
@@ -426,7 +443,7 @@ def build_agent_graph(chat_model: ChatOpenAI, rag_service: RAGService, db: Sessi
     graph.add_node("prepare_action", lambda state: prepare_action(state, chat_model))
     graph.add_node("human_approval", human_approval)
     graph.add_node("authorize_action", authorize_action)
-    graph.add_node("execute_tool", lambda state: execute_tool(state, db, rag_service))
+    graph.add_node("execute_tool", execute_tool_graph_node)
     graph.add_node("execute_write_tool", lambda state: execute_write_tool(state, db))
     graph.add_node("generate_response", lambda state: generate_response(state, chat_model, rag_service))
                    
