@@ -1,15 +1,16 @@
 from unittest.mock import MagicMock, patch
 import pytest
-from src.services.exceptions import DatabaseError
+from src.services.exceptions import DatabaseError, ValidationError
 from datetime import datetime
 from src.mcp.server import (get_customer_tool, get_machine_status_tool, get_order_status_tool, track_shipment_tool, get_maintenance_history_tool,
-                            get_support_ticket_tool)
+                            get_support_ticket_tool, create_order_tool)
 from src.services.machine_service import MachineResult
 from src.services.shipment_service import ShipmentResult
 from src.services.customer_service import CustomerResult
 from src.services.order_service import OrderResult
 from src.services.maintenance_service import MaintenanceHistoryResult
 from src.services.ticket_service import TicketResult
+from src.services.order_service import CreateOrderResult, OrderItemRequest
 
 @patch("src.mcp.server.SessionLocal")
 @patch("src.mcp.server.get_order_status")
@@ -354,5 +355,123 @@ def test_get_support_ticket_tool_propagates_database_error() -> None:
 
         with pytest.raises(DatabaseError, match="Database operation failed."):
             get_support_ticket_tool(machine_serial="AIS2-2025-00142", customer_id=1)
+
+    mock_db.close.assert_called_once()
+
+
+def test_create_order_tool_returns_created_order() -> None:
+    mock_db = MagicMock()
+
+    result = CreateOrderResult(
+        status="CREATED",
+        order_number="ORD-10246",
+        message="Order ORD-10246 was created successfully."
+    )
+
+    with patch("src.mcp.server.SessionLocal", return_value=mock_db), patch("src.mcp.server.create_order", return_value=result) as mock_create_order:
+
+        response = create_order_tool(
+            customer_id=1,
+            items=[
+                {
+                    "product_code": "PROD-100",
+                    "quantity": 1
+                }
+            ]
+        )
+
+    assert response == result.message
+
+    mock_create_order.assert_called_once()
+
+    call_kwargs = mock_create_order.call_args.kwargs
+
+    assert call_kwargs["db"] is mock_db
+    assert call_kwargs["customer_id"] == 1
+
+    order_items = call_kwargs["items"]
+
+    assert len(order_items) == 1
+    assert isinstance(order_items[0], OrderItemRequest)
+    assert order_items[0].product_code == "PROD-100"
+    assert order_items[0].quantity == 1
+
+    mock_db.close.assert_called_once()
+
+
+def test_create_order_tool_supports_multiple_items() -> None:
+    mock_db = MagicMock()
+
+    result = CreateOrderResult(
+        status="CREATED",
+        order_number="ORD-10247",
+        message="Order ORD-10247 was created successfully."
+    )
+
+    with patch("src.mcp.server.SessionLocal", return_value=mock_db), patch("src.mcp.server.create_order", return_value=result) as mock_create_order:
+
+        response = create_order_tool(
+            customer_id=1,
+            items=[
+                {
+                    "product_code": "PROD-200",
+                    "quantity": 2
+                },
+                {
+                    "product_code": "SP-204",
+                    "quantity": 4
+                }
+            ]
+        )
+
+    assert response == result.message
+
+    order_items = mock_create_order.call_args.kwargs["items"]
+
+    assert len(order_items) == 2
+
+    assert order_items[0].product_code == "PROD-200"
+    assert order_items[0].quantity == 2
+
+    assert order_items[1].product_code == "SP-204"
+    assert order_items[1].quantity == 4
+
+    mock_db.close.assert_called_once()
+
+
+def test_create_order_tool_propagates_validation_error() -> None:
+    mock_db = MagicMock()
+
+    with patch("src.mcp.server.SessionLocal", return_value=mock_db), patch("src.mcp.server.create_order", side_effect=ValidationError("Order item quantity must be greater than zero.")):
+
+        with pytest.raises(ValidationError, match="Order item quantity must be greater than zero"):
+            create_order_tool(
+                customer_id=1,
+                items=[
+                    {
+                        "product_code": "PROD-100",
+                        "quantity": 0
+                    }
+                ]
+            )
+
+    mock_db.close.assert_called_once()
+
+
+def test_create_order_tool_propagates_database_error() -> None:
+    mock_db = MagicMock()
+
+    with patch("src.mcp.server.SessionLocal", return_value=mock_db), patch("src.mcp.server.create_order", side_effect=DatabaseError("Database operation failed.")):
+
+        with pytest.raises(DatabaseError, match="Database operation failed"):
+            create_order_tool(
+                customer_id=1,
+                items=[
+                    {
+                        "product_code": "PROD-100",
+                        "quantity": 1
+                    }
+                ]
+            )
 
     mock_db.close.assert_called_once()

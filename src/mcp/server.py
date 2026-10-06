@@ -6,6 +6,7 @@ from src.services.shipment_service import get_shipment
 from src.services.machine_service import get_machine
 from src.services.maintenance_service import get_maintenance_history
 from src.services.ticket_service import get_machine_ticket
+from src.services.order_service import create_order, OrderItemRequest
 
 mcp = MCPServer(
     name="Aurelia Support MCP Server",
@@ -95,6 +96,26 @@ def get_support_ticket_tool(machine_serial: str, customer_id: int) -> str:
     db = SessionLocal()
     try:
         result = get_machine_ticket(db=db, machine_serial=machine_serial, customer_id=customer_id)
+        return result.message
+    finally:
+        db.close()
+
+
+@mcp.tool()
+def create_order_tool(customer_id: int, items: list[dict[str, object]]) -> str:
+    """Create a new order for a customer."""
+    db = SessionLocal()
+    try:
+        order_items = [
+            OrderItemRequest(
+                product_code=str(item["product_code"]),
+                quantity=int(item["quantity"])
+            )
+            for item in items
+        ]
+
+        result = create_order(db=db, customer_id=customer_id, items=order_items)
+
         return result.message
     finally:
         db.close()
