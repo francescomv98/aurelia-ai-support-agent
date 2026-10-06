@@ -2,7 +2,6 @@ import pytest
 from src.services.maintenance_service import (MaintenanceResult, calculate_maintenance_status)
 from src.services.exceptions import ValidationError
 
-
 def test_maintenance_is_not_due() -> None:
     result = calculate_maintenance_status(current_hours=1734, maintenance_interval=2000)
 
