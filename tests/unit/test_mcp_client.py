@@ -1,5 +1,7 @@
 import pytest
-from src.mcp.client import create_mcp_client
+from src.mcp.client import create_mcp_client, call_mcp_tool
+from unittest.mock import AsyncMock, MagicMock
+from src.services.exceptions import ExternalServiceError
 
 @pytest.mark.anyio
 async def test_mcp_client_can_list_tools() -> None:
@@ -33,3 +35,70 @@ async def test_mcp_client_can_call_order_status_tool() -> None:
 
     assert len(result.content) == 1
     assert result.content[0].text == "Order ORD-10241 is DELIVERED."
+
+
+@pytest.mark.anyio
+async def test_call_mcp_tool_returns_text_response() -> None:
+    client = MagicMock()
+
+    result = MagicMock()
+    result.content = [MagicMock(text="Order ORD-10241 is DELIVERED.")]
+
+    client.call_tool = AsyncMock(return_value=result)
+
+    response = await call_mcp_tool(client=client, tool_name="get_order_status_tool", arguments={
+            "order_id": "ORD-10241",
+            "customer_id": 1
+        }
+    )
+
+    assert response == "Order ORD-10241 is DELIVERED."
+
+    client.call_tool.assert_awaited_once_with("get_order_status_tool",
+        {
+            "order_id": "ORD-10241",
+            "customer_id": 1
+        }
+    )
+
+
+@pytest.mark.anyio
+async def test_call_mcp_tool_combines_multiple_text_contents() -> None:
+    client = MagicMock()
+
+    result = MagicMock()
+    result.content = [MagicMock(text="First response."), MagicMock(text="Second response.")]
+
+    client.call_tool = AsyncMock(return_value=result)
+
+    response = await call_mcp_tool(client=client, tool_name="test_tool", arguments={})
+
+    assert response == "First response.\nSecond response."
+
+
+@pytest.mark.anyio
+async def test_call_mcp_tool_raises_external_service_error_on_failure() -> None:
+    client = MagicMock()
+
+    client.call_tool = AsyncMock(side_effect=RuntimeError("Connection failed"))
+
+    with pytest.raises(ExternalServiceError, match="MCP service is currently unavailable"):
+        await call_mcp_tool(client=client, tool_name="get_order_status_tool",
+            arguments={
+                "order_id": "ORD-10241",
+                "customer_id": 1
+            }
+        )
+
+
+@pytest.mark.anyio
+async def test_call_mcp_tool_raises_external_service_error_on_empty_response() -> None:
+    client = MagicMock()
+
+    result = MagicMock()
+    result.content = []
+
+    client.call_tool = AsyncMock(return_value=result)
+
+    with pytest.raises(ExternalServiceError, match="MCP service returned an empty response"):
+        await call_mcp_tool(client=client, tool_name="test_tool", arguments={})
