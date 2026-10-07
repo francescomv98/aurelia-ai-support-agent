@@ -5,7 +5,6 @@ from src.database.models import UserRole
 from src.rag.rag_service import RAGService
 from src.services.machine_service import MachineResult
 from src.services.ticket_service import TicketResult
-from src.services.shipment_service import ShipmentResult
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from src.agent.graph import build_agent_graph, human_approval, generate_response
@@ -862,7 +861,6 @@ async def test_execute_write_tool_uses_mcp_for_create_support_ticket() -> None:
     mock_client.__aexit__ = AsyncMock(return_value=None)
 
     with patch("src.agent.graph.create_mcp_client", return_value=mock_client), patch("src.agent.graph.call_mcp_tool", new=AsyncMock(return_value=("Support ticket TCK-XXXX was created successfully."))) as mock_call_mcp_tool:
-
         result = await execute_write_tool(state=state, db=MagicMock())
 
     assert result["tool_result"] == "Support ticket TCK-XXXX was created successfully."

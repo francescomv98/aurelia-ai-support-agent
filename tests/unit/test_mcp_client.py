@@ -191,3 +191,18 @@ async def test_mcp_client_can_create_support_ticket() -> None:
     assert len(result.content) == 1
     assert result.content[0].text.startswith("Support ticket TCK-")
     assert result.content[0].text.endswith("was created successfully.")
+
+
+@pytest.mark.anyio
+async def test_mcp_client_can_update_support_ticket() -> None:
+    async with create_mcp_client() as client:
+        result = await client.call_tool("update_support_ticket_tool",
+            {
+                "ticket_number": "TCK-5021",
+                "customer_id": 1,
+                "priority": "P1"
+            }
+        )
+
+    assert len(result.content) == 1
+    assert result.content[0].text == "Support ticket TCK-5021 was updated successfully."

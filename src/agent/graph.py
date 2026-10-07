@@ -11,8 +11,6 @@ from src.rag.rag_service import RAGService
 from src.tools.machine_tools import get_machine_tool
 from src.services.maintenance_service import calculate_maintenance_status
 from src.tools.ticket_tools import get_machine_ticket_tool
-from src.tools.support_ticket_tools import update_support_ticket_tool
-from src.services.order_service import OrderItemRequest
 from sqlalchemy import select
 from src.database.models import Customer
 from langgraph.checkpoint.postgres import PostgresSaver
@@ -438,12 +436,26 @@ async def execute_write_tool(state: AgentState, db: Session) -> AgentState:
         }
 
     if pending_action.action_type == "update_support_ticket":
-        result = update_support_ticket_tool(db=db, user=state["authenticated_user"], ticket_number=pending_action.parameters["ticket_number"], status=pending_action.parameters.get("status"),
-            priority=pending_action.parameters.get("priority"), subject=pending_action.parameters.get("subject"), description=pending_action.parameters.get("description"))
+        user = state["authenticated_user"]
+
+        if user.customer_id is None:
+            raise AuthorizationError("Authenticated user has no customer context.")
+
+        async with create_mcp_client() as client:
+            result = await call_mcp_tool(client=client, tool_name="update_support_ticket_tool",
+                arguments={
+                    "ticket_number": pending_action.parameters["ticket_number"],
+                    "customer_id": user.customer_id,
+                    "status": pending_action.parameters.get("status"),
+                    "priority": pending_action.parameters.get("priority"),
+                    "subject": pending_action.parameters.get("subject"),
+                    "description": pending_action.parameters.get("description")
+                }
+            )
 
         return {
             **state,
-            "tool_result": result.message
+            "tool_result": result
         }
 
     raise ValueError(f"Unsupported write action: {pending_action.action_type}")
