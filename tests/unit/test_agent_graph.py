@@ -21,33 +21,40 @@ def create_customer_user() -> AuthenticatedUser:
 
 
 @pytest.mark.anyio
-async def test_execute_tool_returns_order_result(monkeypatch) -> None:
-    user = create_customer_user()
-
-    def fake_get_order_status_tool(db, order_id: str, user: AuthenticatedUser) -> str:
-        assert order_id == "ORD-10245"
-        assert user.user_id == 1
-        assert user.customer_id == 1
-        assert user.role == UserRole.CUSTOMER
-
-        return "Order ORD-10245 is SHIPPED."
-
-    monkeypatch.setattr("src.agent.graph.get_order_status_tool", fake_get_order_status_tool)
-
+async def test_execute_tool_returns_order_result() -> None:
     state = {
         "user_query": "What is the status of order ORD-10245?",
-        "authenticated_user": user,
+        "authenticated_user": AuthenticatedUser(
+            user_id=1,
+            customer_id=1,
+            role=UserRole.CUSTOMER
+        ),
         "route": "tool",
+        "retrieved_context": [],
         "rag_available": True,
         "tool_type": "order",
-        "retrieved_context": [],
+        "pending_action": None,
         "tool_result": "",
         "response": ""
     }
 
-    result = await execute_tool(state=state, db=object(), rag_service=object())
+    mock_client = MagicMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("src.agent.graph.create_mcp_client", return_value=mock_client), patch("src.agent.graph.call_mcp_tool", new=AsyncMock(return_value="Order ORD-10245 is SHIPPED.")) as mock_call_mcp_tool:
+        result = await execute_tool(state=state, db=MagicMock(), rag_service=MagicMock())
 
     assert result["tool_result"] == "Order ORD-10245 is SHIPPED."
+
+    mock_call_mcp_tool.assert_awaited_once_with(
+        client=mock_client,
+        tool_name="get_order_status_tool",
+        arguments={
+            "order_id": "ORD-10245",
+            "customer_id": 1
+        }
+    )
 
 
 @pytest.mark.anyio
@@ -289,42 +296,6 @@ def test_determine_shipment_tool_type() -> None:
     result = determine_tool_type(state)
 
     assert result["tool_type"] == "shipment"
-
-
-@pytest.mark.anyio
-async def test_execute_shipment_tool() -> None:
-    db = MagicMock()
-
-    shipment_result = ShipmentResult(
-        status="FOUND",
-        tracking_number="SHIP-90231",
-        carrier="DHL",
-        shipment_status="IN_TRANSIT",
-        estimated_delivery=None,
-        message="Shipment SHIP-90231 is currently IN_TRANSIT. Carrier: DHL."
-    )
-
-    user = AuthenticatedUser(user_id=1, customer_id=1, role=UserRole.CUSTOMER)
-
-    state = {
-        "user_query": "Where is shipment SHIP-90231?",
-        "authenticated_user": user,
-        "route": "tool",
-        "retrieved_context": [],
-        "rag_available": True,
-        "tool_type": "shipment",
-        "tool_result": "",
-        "response": ""
-    }
-
-    with pytest.MonkeyPatch.context() as monkeypatch:
-        monkeypatch.setattr("src.agent.graph.get_shipment_tool", MagicMock(return_value=shipment_result))
-
-        result = await execute_tool(state=state, db=db, rag_service=MagicMock())
-
-    assert "SHIP-90231" in result["tool_result"]
-    assert "DHL" in result["tool_result"]
-    assert "IN_TRANSIT" in result["tool_result"]
 
 
 def test_determine_product_tool():
@@ -637,5 +608,221 @@ async def test_execute_tool_uses_mcp_for_order_status() -> None:
         arguments={
             "order_id": "ORD-10241",
             "customer_id": 1
+        }
+    )
+
+
+@pytest.mark.anyio
+async def test_execute_tool_uses_mcp_for_customer() -> None:
+    state = {
+        "user_query": "Show me information about customer CUST-001.",
+        "authenticated_user": AuthenticatedUser(
+            user_id=1,
+            customer_id=1,
+            role=UserRole.CUSTOMER
+        ),
+        "route": "tool",
+        "retrieved_context": [],
+        "rag_available": True,
+        "tool_type": "customer",
+        "pending_action": None,
+        "tool_result": "",
+        "response": ""
+    }
+
+    mock_client = MagicMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    mock_customer = MagicMock()
+    mock_customer.id = 1
+
+    with patch("src.agent.graph.create_mcp_client", return_value=mock_client), patch("src.agent.graph.call_mcp_tool", new=AsyncMock(return_value="Customer CUST-001: Alfa Manufacturing S.p.A." )) as mock_call_mcp_tool, patch("src.agent.graph.select") as mock_select:
+        mock_select.return_value = MagicMock()
+
+        mock_db = MagicMock()
+        mock_db.scalar.return_value = mock_customer
+
+        result = await execute_tool(state=state, db=mock_db, rag_service=MagicMock())
+
+    assert result["tool_result"] == "Customer CUST-001: Alfa Manufacturing S.p.A."
+
+    mock_call_mcp_tool.assert_awaited_once_with(client=mock_client, tool_name="get_customer_tool", arguments={ "customer_id": 1 })
+
+
+@pytest.mark.anyio
+async def test_execute_tool_uses_mcp_for_shipment() -> None:
+    state = {
+        "user_query": "Where is shipment SHIP-90231?",
+        "authenticated_user": AuthenticatedUser(
+            user_id=1,
+            customer_id=1,
+            role=UserRole.CUSTOMER,
+        ),
+        "route": "tool",
+        "retrieved_context": [],
+        "rag_available": True,
+        "tool_type": "shipment",
+        "pending_action": None,
+        "tool_result": "",
+        "response": ""
+    }
+
+    mock_client = MagicMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("src.agent.graph.create_mcp_client", return_value=mock_client), patch("src.agent.graph.call_mcp_tool", new=AsyncMock(return_value="Shipment SHIP-90231 is IN_TRANSIT.")) as mock_call_mcp_tool:
+        result = await execute_tool(state=state, db=MagicMock(), rag_service=MagicMock())
+
+    assert result["tool_result"] == "Shipment SHIP-90231 is IN_TRANSIT."
+
+    mock_call_mcp_tool.assert_awaited_once_with(client=mock_client, tool_name="track_shipment_tool", arguments={ "tracking_number": "SHIP-90231", "customer_id": 1 })
+
+
+@pytest.mark.anyio
+async def test_execute_tool_uses_mcp_for_machine_status() -> None:
+    state = {
+        "user_query": "What is the status of machine AIS2-2025-00142?",
+        "authenticated_user": AuthenticatedUser(
+            user_id=1,
+            customer_id=1,
+            role=UserRole.CUSTOMER
+        ),
+        "route": "tool",
+        "retrieved_context": [],
+        "rag_available": True,
+        "tool_type": "machine",
+        "pending_action": None,
+        "tool_result": "",
+        "response": ""
+    }
+
+    mock_client = MagicMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("src.agent.graph.create_mcp_client", return_value=mock_client), patch("src.agent.graph.call_mcp_tool", new=AsyncMock(return_value=("Machine AIS2-2025-00142 is an AIS-200 with 1734 operating hours."))) as mock_call_mcp_tool:
+        result = await execute_tool(state=state, db=MagicMock(), rag_service=MagicMock())
+
+    assert "AIS2-2025-00142" in result["tool_result"]
+    assert "1734 operating hours" in result["tool_result"]
+
+    mock_call_mcp_tool.assert_awaited_once_with(client=mock_client, tool_name="get_machine_status_tool",
+        arguments={
+            "machine_serial": "AIS2-2025-00142",
+            "customer_id": 1
+        }
+    )
+
+
+@pytest.mark.anyio
+async def test_execute_tool_uses_mcp_for_maintenance_history() -> None:
+    state = {
+        "user_query": "Show me the maintenance history of machine AIS2-2025-00142.",
+        "authenticated_user": AuthenticatedUser(
+            user_id=1,
+            customer_id=1,
+            role=UserRole.CUSTOMER
+        ),
+        "route": "tool",
+        "retrieved_context": [],
+        "rag_available": True,
+        "tool_type": "machine",
+        "pending_action": None,
+        "tool_result": "",
+        "response": ""
+    }
+
+    mock_client = MagicMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("src.agent.graph.create_mcp_client", return_value=mock_client), patch("src.agent.graph.call_mcp_tool", new=AsyncMock(return_value=("Maintenance history for machine AIS2-2025-00142: preventive maintenance completed."))) as mock_call_mcp_tool:
+        result = await execute_tool(state=state, db=MagicMock(), rag_service=MagicMock())
+
+    assert "AIS2-2025-00142" in result["tool_result"]
+    assert "Maintenance history" in result["tool_result"]
+
+    mock_call_mcp_tool.assert_awaited_once_with(client=mock_client, tool_name="get_maintenance_history_tool",
+        arguments={
+            "machine_serial": "AIS2-2025-00142",
+            "customer_id": 1
+        }
+    )
+
+
+@pytest.mark.anyio
+async def test_execute_tool_uses_mcp_for_support_ticket() -> None:
+    state = {
+        "user_query": "Show me the support ticket for machine AIS2-2025-00142.",
+        "authenticated_user": AuthenticatedUser(
+            user_id=1,
+            customer_id=1,
+            role=UserRole.CUSTOMER
+        ),
+        "route": "tool",
+        "retrieved_context": [],
+        "rag_available": True,
+        "tool_type": "machine",
+        "pending_action": None,
+        "tool_result": "",
+        "response": ""
+    }
+
+    mock_client = MagicMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("src.agent.graph.create_mcp_client", return_value=mock_client), patch("src.agent.graph.call_mcp_tool", new=AsyncMock(return_value=("Support ticket TCK-5021 for machine AIS2-2025-00142 is IN_PROGRESS."))) as mock_call_mcp_tool:
+        result = await execute_tool(state=state, db=MagicMock(), rag_service=MagicMock())
+
+    assert "AIS2-2025-00142" in result["tool_result"]
+    assert "TCK-5021" in result["tool_result"]
+
+    mock_call_mcp_tool.assert_awaited_once_with(client=mock_client, tool_name="get_support_ticket_tool",
+        arguments={
+            "machine_serial": "AIS2-2025-00142",
+            "customer_id": 1
+        }
+    )
+
+
+@pytest.mark.anyio
+async def test_execute_tool_uses_mcp_for_product() -> None:
+    state = {
+        "user_query": "What is the information for product AIS-200?",
+        "authenticated_user": AuthenticatedUser(
+            user_id=1,
+            customer_id=1,
+            role=UserRole.CUSTOMER
+        ),
+        "route": "tool",
+        "retrieved_context": [],
+        "rag_available": True,
+        "tool_type": "product",
+        "pending_action": None,
+        "tool_result": "",
+        "response": ""
+    }
+
+    mock_client = MagicMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("src.agent.graph.create_mcp_client", return_value=mock_client), patch("src.agent.graph.call_mcp_tool", new=AsyncMock(
+            return_value=(
+                "Product PROD-200: AIS-200. "
+                "Category: MACHINE. "
+                "Capacity: 80 units per minute. "
+                "Maintenance interval: 2000 operating hours."
+            ))) as mock_call_mcp_tool:
+        result = await execute_tool(state=state, db=MagicMock(), rag_service=MagicMock())
+
+    assert "Product PROD-200: AIS-200." in result["tool_result"]
+
+    mock_call_mcp_tool.assert_awaited_once_with(client=mock_client, tool_name="get_product_tool",
+        arguments={
+            "product_code": "AIS-200"
         }
     )

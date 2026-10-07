@@ -20,6 +20,7 @@ async def test_mcp_client_can_list_tools() -> None:
     assert "cancel_order_tool" in tool_names
     assert "create_support_ticket_tool" in tool_names
     assert "update_support_ticket_tool" in tool_names
+    assert "get_product_tool" in tool_names
 
 
 @pytest.mark.anyio
@@ -102,3 +103,22 @@ async def test_call_mcp_tool_raises_external_service_error_on_empty_response() -
 
     with pytest.raises(ExternalServiceError, match="MCP service returned an empty response"):
         await call_mcp_tool(client=client, tool_name="test_tool", arguments={})
+
+
+@pytest.mark.anyio
+async def test_mcp_client_can_call_product_tool() -> None:
+    async with create_mcp_client() as client:
+        result = await client.call_tool(
+            "get_product_tool",
+            {
+                "product_code": "AIS-200"
+            }
+        )
+
+    assert len(result.content) == 1
+    assert result.content[0].text == (
+        "Product PROD-200: AIS-200. "
+        "Category: MACHINE. "
+        "Capacity: 80 units per minute. "
+        "Maintenance interval: 2000 operating hours."
+    )

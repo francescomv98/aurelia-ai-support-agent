@@ -9,12 +9,9 @@ from src.agent.state import AgentState
 from src.logging.logger import logger
 from src.rag.rag_service import RAGService
 from src.tools.machine_tools import get_machine_tool
-from src.tools.order_tools import (create_order_tool, cancel_order_tool, get_order_status_tool)
+from src.tools.order_tools import (create_order_tool, cancel_order_tool)
 from src.services.maintenance_service import calculate_maintenance_status
 from src.tools.ticket_tools import get_machine_ticket_tool
-from src.tools.shipment_tools import get_shipment_tool
-from src.tools.product_tools import get_product_tool
-from src.tools.customer_tools import get_customer_tool
 from src.tools.support_ticket_tools import (create_support_ticket_tool, update_support_ticket_tool)
 from src.services.order_service import OrderItemRequest
 from sqlalchemy import select
@@ -147,6 +144,62 @@ async def execute_tool(state: AgentState, db: Session, rag_service: RAGService) 
                 "tool_result": "I could not identify a machine serial number."
             }
 
+        if state["route"] == "tool":
+            if user.customer_id is None:
+                raise AuthorizationError("Customer user has no customer context.")
+
+            query_lower = query.lower()
+
+            maintenance_keywords = ("maintenance", "maintenance history", "maintenance record", "maintenance records", "service history",
+                "service record", "service records")
+
+            is_maintenance_request = any(keyword in query_lower for keyword in maintenance_keywords)
+
+            if is_maintenance_request:
+                async with create_mcp_client() as client:
+                    result = await call_mcp_tool(client=client, tool_name="get_maintenance_history_tool",
+                        arguments={
+                            "machine_serial": machine_serial,
+                            "customer_id": user.customer_id
+                        }
+                    )
+
+                return {
+                    **state,
+                    "tool_result": result
+                }
+
+            ticket_keywords = ("ticket", "support ticket", "support case", "case")
+
+            is_ticket_request = any(keyword in query_lower for keyword in ticket_keywords)
+
+            if is_ticket_request:
+                async with create_mcp_client() as client:
+                    result = await call_mcp_tool(client=client, tool_name="get_support_ticket_tool",
+                        arguments={
+                            "machine_serial": machine_serial,
+                            "customer_id": user.customer_id
+                        }
+                    )
+
+                return {
+                    **state,
+                    "tool_result": result
+                }
+
+            async with create_mcp_client() as client:
+                result = await call_mcp_tool(client=client, tool_name="get_machine_status_tool",
+                    arguments={
+                        "machine_serial": machine_serial,
+                        "customer_id": user.customer_id
+                    }
+                )
+
+            return {
+                **state,
+                "tool_result": result
+            }
+
         machine_result = get_machine_tool(db=db, machine_serial=machine_serial, user=user)
 
         if machine_result.status == "NOT_FOUND":
@@ -192,9 +245,7 @@ async def execute_tool(state: AgentState, db: Session, rag_service: RAGService) 
 
             return {
                 **state,
-                "tool_result": (
-                    "Machine information is incomplete and maintenance status cannot be calculated."
-                )
+                "tool_result": "Machine information is incomplete and maintenance status cannot be calculated."
             }
 
         maintenance_interval = rag_service.extract_maintenance_interval(documents=state["retrieved_context"], model=machine_result.model)
@@ -234,11 +285,20 @@ async def execute_tool(state: AgentState, db: Session, rag_service: RAGService) 
 
         tracking_number = tracking_match.group(0)
 
-        shipment_result = get_shipment_tool(db=db, tracking_number=tracking_number, user=state["authenticated_user"])
+        if user.customer_id is None:
+            raise AuthorizationError("Customer user has no customer context.")
+
+        async with create_mcp_client() as client:
+            result = await call_mcp_tool(client=client, tool_name="track_shipment_tool",
+                arguments={
+                    "tracking_number": tracking_number,
+                    "customer_id": user.customer_id
+                }
+            )
 
         return {
             **state,
-            "tool_result": shipment_result.message
+            "tool_result": result
         }
 
     if state["tool_type"] == "product":
@@ -252,26 +312,33 @@ async def execute_tool(state: AgentState, db: Session, rag_service: RAGService) 
 
         product_code = product_match.group(0)
 
-        product_result = get_product_tool(db=db, product_code=product_code, user=user)
+        async with create_mcp_client() as client:
+            result = await call_mcp_tool(client=client, tool_name="get_product_tool",
+                arguments={
+                    "product_code": product_code
+               }
+            )
 
         return {
             **state,
-            "tool_result": product_result.message
+            "tool_result": result
         }
     
     if state["tool_type"] == "customer":
         customer_match = re.search(r"\bCUST-\d+\b", query.upper())
 
-        customer_id = None
-
-        if customer_match:
+        if not customer_match:
+            customer_id = user.customer_id
+            if customer_id is None:
+                raise AuthorizationError("Customer user has no customer context.")
+        else:
             customer_code = customer_match.group(0)
 
             try:
                 customer = db.scalar(select(Customer).where(Customer.customer_code == customer_code))
             except SQLAlchemyError as exc:
                 logger.exception("Database operation failed")
-                raise DatabaseError("Database operation failed.") from exc 
+                raise DatabaseError("Database operation failed.") from exc
 
             if customer is None:
                 return {
@@ -281,12 +348,12 @@ async def execute_tool(state: AgentState, db: Session, rag_service: RAGService) 
 
             customer_id = customer.id
 
-        customer_result = get_customer_tool(db=db, user=user, customer_id=customer_id)
+        async with create_mcp_client() as client:
+            result = await call_mcp_tool(client=client, tool_name="get_customer_tool",
+                arguments={ "customer_id": customer_id }
+            )
 
-        return {
-            **state,
-            "tool_result": customer_result.message
-        }
+        return {**state, "tool_result": result}
 
     logger.warning("No enterprise tool selected")
 

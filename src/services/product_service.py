@@ -21,7 +21,7 @@ def get_product(db: Session, product_code: str) -> ProductResult:
     """Retrieve product information from the database."""
 
     try:
-        product = db.scalar(select(Product).where(Product.product_code == product_code))    
+        product = db.scalar(select(Product).where((Product.product_code == product_code) | (Product.name == product_code)))    
     except SQLAlchemyError as exc:
         logger.exception("Database operation failed")
         raise DatabaseError("Database operation failed.") from exc  
@@ -36,9 +36,7 @@ def get_product(db: Session, product_code: str) -> ProductResult:
             category=None,
             capacity_per_minute=None,
             maintenance_interval_hours=None,
-            message=(
-                f"The product {product_code} was not found in the system."
-            )
+            message=f"The product {product_code} was not found in the system."
         )
 
     logger.info("Product retrieved", product_code=product.product_code)
