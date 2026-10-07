@@ -397,11 +397,22 @@ async def execute_write_tool(state: AgentState, db: Session) -> AgentState:
         if not order_number:
             raise ValueError("Order number is required for cancel_order.")
 
-        result = cancel_order_tool(db=db, user=state["authenticated_user"], order_id=order_number)
+        user = state["authenticated_user"]
+
+        if user.customer_id is None:
+            raise AuthorizationError("Authenticated user has no customer context.")
+
+        async with create_mcp_client() as client:
+            result = await call_mcp_tool(client=client, tool_name="cancel_order_tool",
+                arguments={
+                    "order_id": order_number,
+                    "customer_id": user.customer_id
+                }
+            )
 
         return {
             **state,
-            "tool_result": result.message
+            "tool_result": result
         }
 
     if pending_action.action_type == "create_support_ticket":

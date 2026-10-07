@@ -127,8 +127,7 @@ async def test_mcp_client_can_call_product_tool() -> None:
 @pytest.mark.anyio
 async def test_mcp_client_can_create_order() -> None:
     async with create_mcp_client() as client:
-        result = await client.call_tool(
-            "create_order_tool",
+        result = await client.call_tool("create_order_tool",
             {
                 "customer_id": 1,
                 "items": [
@@ -143,3 +142,17 @@ async def test_mcp_client_can_create_order() -> None:
     assert len(result.content) == 1
     assert result.content[0].text.startswith("Order ORD-")
     assert result.content[0].text.endswith("was created successfully.")
+
+
+@pytest.mark.anyio
+async def test_mcp_client_can_cancel_order() -> None:
+    async with create_mcp_client() as client:
+        result = await client.call_tool("cancel_order_tool",
+            {
+                "order_id": "ORD-10242",
+                "customer_id": 2,
+            }
+        )
+
+    assert len(result.content) == 1
+    assert result.content[0].text == "Order ORD-10242 was cancelled successfully."
