@@ -1,7 +1,5 @@
 from mcp import Client
-
 from src.services.exceptions import ExternalServiceError
-
 
 MCP_SERVER_URL = "http://localhost:8001/mcp"
 

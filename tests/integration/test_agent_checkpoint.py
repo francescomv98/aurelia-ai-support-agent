@@ -2,7 +2,9 @@ from unittest.mock import MagicMock
 from src.agent.graph import build_agent_graph
 from src.agent.checkpointer import create_checkpointer
 from src.auth.models import AuthenticatedUser, UserRole
+import pytest
 
+@pytest.mark.integration
 def test_agent_graph_persists_checkpoint():
     chat_model = MagicMock()
 

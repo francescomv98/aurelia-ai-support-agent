@@ -1,7 +1,7 @@
 from datetime import datetime
 import pytest
 from src.services.support_ticket_service import (CreateSupportTicketResult, create_support_ticket, update_support_ticket)
-from src.services.exceptions import AuthorizationError, ValidationError
+from src.services.exceptions import ValidationError
 
 class FakeMachine:
     def __init__(self, machine_id=1):

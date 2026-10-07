@@ -1,8 +1,9 @@
 from unittest.mock import MagicMock
 from langgraph.types import Command
-from src.agent.checkpointer import create_checkpointer
 from src.agent.graph import build_agent_graph
 from src.auth.models import AuthenticatedUser, UserRole
+from langgraph.checkpoint.memory import InMemorySaver
+import pytest
 
 def create_test_graph():
     chat_model = MagicMock()
@@ -30,7 +31,7 @@ def create_test_graph():
 
     db = MagicMock()
 
-    checkpointer = create_checkpointer()
+    checkpointer = InMemorySaver()
 
     agent_graph = build_agent_graph(chat_model=chat_model, rag_service=rag_service, db=db, checkpointer=checkpointer)
 
@@ -53,13 +54,14 @@ def create_initial_state():
     }
 
 
-
-def test_agent_graph_resumes_after_human_approval():
+@pytest.mark.integration
+@pytest.mark.anyio
+async def test_agent_graph_resumes_after_human_approval():
     agent_graph = create_test_graph()
 
     config = {"configurable": {"thread_id": "hitl-approved-test"}}
 
-    result = agent_graph.invoke(create_initial_state(), config=config)
+    result = await agent_graph.ainvoke(create_initial_state(), config=config)
 
     assert "__interrupt__" in result
 
@@ -68,20 +70,22 @@ def test_agent_graph_resumes_after_human_approval():
     assert interrupt_data["type"] == "human_approval"
     assert interrupt_data["action_type"] == "create_order"
 
-    resumed_result = agent_graph.invoke(Command(resume="APPROVED"), config=config)
+    resumed_result = await agent_graph.ainvoke(Command(resume="APPROVED"), config=config)
 
     assert resumed_result["response"] == "The order action was approved."
 
 
-def test_agent_graph_resumes_after_human_rejection():
+@pytest.mark.integration
+@pytest.mark.anyio
+async def test_agent_graph_resumes_after_human_rejection():
     agent_graph = create_test_graph()
 
     config = {"configurable": {"thread_id": "hitl-rejected-test"}}
 
-    result = agent_graph.invoke(create_initial_state(), config=config)
+    result = await agent_graph.ainvoke(create_initial_state(), config=config)
 
     assert "__interrupt__" in result
 
-    resumed_result = agent_graph.invoke(Command(resume="REJECTED"), config=config)
+    resumed_result = await agent_graph.ainvoke(Command(resume="REJECTED"), config=config)
 
     assert resumed_result["tool_result"] == "The requested action was rejected."

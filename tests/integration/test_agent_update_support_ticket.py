@@ -59,7 +59,8 @@ def create_initial_state():
 
 
 @pytest.mark.integration
-def test_update_support_ticket_through_agent_workflow() -> None:
+@pytest.mark.anyio
+async def test_update_support_ticket_through_agent_workflow() -> None:
     agent_graph, db = create_test_graph()
 
     try:
@@ -69,7 +70,7 @@ def test_update_support_ticket_through_agent_workflow() -> None:
 
         config = { "configurable": { "thread_id": "integration-update-support-ticket-test" }}
 
-        result = agent_graph.invoke(create_initial_state(), config=config)
+        result = await agent_graph.ainvoke(create_initial_state(), config=config)
 
         assert "__interrupt__" in result
 
@@ -84,7 +85,7 @@ def test_update_support_ticket_through_agent_workflow() -> None:
         assert interrupt_data["parameters"]["subject"] is None
         assert interrupt_data["parameters"]["description"] is None
 
-        resumed_result = agent_graph.invoke(Command(resume="APPROVED"), config=config)
+        resumed_result = await agent_graph.ainvoke(Command(resume="APPROVED"), config=config)
 
         assert resumed_result["response"] == "Support ticket TCK-5021 was updated successfully."
 
@@ -98,7 +99,8 @@ def test_update_support_ticket_through_agent_workflow() -> None:
 
 
 @pytest.mark.integration
-def test_update_support_ticket_rejected_by_human() -> None:
+@pytest.mark.anyio
+async def test_update_support_ticket_rejected_by_human() -> None:
     agent_graph, db = create_test_graph()
 
     try:
@@ -110,11 +112,11 @@ def test_update_support_ticket_rejected_by_human() -> None:
 
         config = { "configurable": { "thread_id": "integration-update-support-ticket-rejected-test" }}
 
-        result = agent_graph.invoke(create_initial_state(), config=config)
+        result = await agent_graph.ainvoke(create_initial_state(), config=config)
 
         assert "__interrupt__" in result
 
-        resumed_result = agent_graph.invoke(Command(resume="REJECTED"), config=config)
+        resumed_result = await agent_graph.ainvoke(Command(resume="REJECTED"), config=config)
 
         assert resumed_result["response"] is not None
 

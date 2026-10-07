@@ -9,7 +9,8 @@ from src.database.models import Order, OrderItem
 from src.database.session import SessionLocal
 
 @pytest.mark.integration
-def test_create_order_through_agent_workflow() -> None:
+@pytest.mark.anyio
+async def test_create_order_through_agent_workflow() -> None:
     chat_model = MagicMock()
 
     route_response = MagicMock()
@@ -52,7 +53,7 @@ def test_create_order_through_agent_workflow() -> None:
 
         config = { "configurable": { "thread_id": "integration-create-order-test" }}
 
-        result = agent_graph.invoke(initial_state, config=config)
+        result = await agent_graph.ainvoke(initial_state, config=config)
 
         assert "__interrupt__" in result
 
@@ -61,7 +62,7 @@ def test_create_order_through_agent_workflow() -> None:
         assert interrupt_data["type"] == "human_approval"
         assert interrupt_data["action_type"] == "create_order"
 
-        resumed_result = agent_graph.invoke(Command(resume="APPROVED"), config=config)
+        resumed_result = await agent_graph.ainvoke(Command(resume="APPROVED"), config=config)
 
         assert resumed_result["response"] == "Order created successfully."
 

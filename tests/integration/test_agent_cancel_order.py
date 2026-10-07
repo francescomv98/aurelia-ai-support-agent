@@ -6,6 +6,7 @@ from src.agent.graph import build_agent_graph
 from src.auth.models import AuthenticatedUser, UserRole
 from src.database.models import Order
 from src.database.session import SessionLocal
+import pytest
 
 def create_test_graph():
     chat_model = MagicMock()
@@ -51,13 +52,15 @@ def create_initial_state():
     }
 
 
-def test_cancel_order_through_agent_workflow() -> None:
+@pytest.mark.integration
+@pytest.mark.anyio
+async def test_cancel_order_through_agent_workflow() -> None:
     agent_graph, db = create_test_graph()
 
     try:
         config = { "configurable": { "thread_id": "integration-cancel-order-test" } }
 
-        result = agent_graph.invoke(create_initial_state(), config=config)
+        result = await agent_graph.ainvoke(create_initial_state(), config=config)
 
         assert "__interrupt__" in result
 
@@ -67,7 +70,7 @@ def test_cancel_order_through_agent_workflow() -> None:
         assert interrupt_data["action_type"] == "cancel_order"
         assert interrupt_data["parameters"]["order_number"] == "ORD-10244"
 
-        resumed_result = agent_graph.invoke(Command(resume="APPROVED"), config=config)
+        resumed_result = await agent_graph.ainvoke(Command(resume="APPROVED"), config=config)
 
         assert resumed_result["response"] == "Order ORD-10244 was cancelled successfully."
 

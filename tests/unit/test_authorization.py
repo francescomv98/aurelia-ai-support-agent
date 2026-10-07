@@ -5,7 +5,7 @@ from src.security.authorization import (require_customer_access, require_role)
 from unittest.mock import MagicMock
 from src.agent.authorization import authorize_action
 from src.agent.state import PendingAction
-from src.services.exceptions import AuthorizationError, ValidationError
+from src.services.exceptions import AuthorizationError
 
 def create_user(user_id: int = 1, customer_id: int | None = 1, role: UserRole = UserRole.CUSTOMER) -> AuthenticatedUser:
     return AuthenticatedUser(user_id=user_id, customer_id=customer_id, role=role)

@@ -8,7 +8,7 @@ def test_ticket_result_found() -> None:
         priority="P2",
         ticket_status="IN_PROGRESS",
         subject="AIS-200 E-204 cooling system warning",
-        message="Support ticket TCK-5021 exists.",
+        message="Support ticket TCK-5021 exists."
     )
 
     assert result.status == "FOUND"

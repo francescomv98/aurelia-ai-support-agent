@@ -9,7 +9,8 @@ from src.database.models import Machine, SupportTicket
 from src.database.session import SessionLocal
 
 @pytest.mark.integration
-def test_create_support_ticket_through_agent_workflow() -> None:
+@pytest.mark.anyio
+async def test_create_support_ticket_through_agent_workflow() -> None:
     chat_model = MagicMock()
 
     route_response = MagicMock()
@@ -61,7 +62,7 @@ def test_create_support_ticket_through_agent_workflow() -> None:
 
         config = { "configurable": { "thread_id": "integration-create-support-ticket-test" }}
 
-        result = agent_graph.invoke(initial_state, config=config)
+        result = await agent_graph.ainvoke(initial_state, config=config)
 
         assert "__interrupt__" in result
 
@@ -74,7 +75,7 @@ def test_create_support_ticket_through_agent_workflow() -> None:
         assert interrupt_data["parameters"]["priority"] == "P2"
         assert interrupt_data["parameters"]["machine_serial"] == "AIS2-2025-00142"
 
-        resumed_result = agent_graph.invoke(Command(resume="APPROVED"), config=config)
+        resumed_result = await agent_graph.ainvoke(Command(resume="APPROVED"), config=config)
 
         assert resumed_result["response"] == "Support ticket created successfully."
 
@@ -91,7 +92,8 @@ def test_create_support_ticket_through_agent_workflow() -> None:
 
 
 @pytest.mark.integration
-def test_create_support_ticket_rejected_by_human() -> None:
+@pytest.mark.anyio
+async def test_create_support_ticket_rejected_by_human() -> None:
     chat_model = MagicMock()
 
     route_response = MagicMock()
@@ -121,10 +123,7 @@ def test_create_support_ticket_rejected_by_human() -> None:
 
         assert machine is not None
 
-        existing_ticket_ids = {
-            ticket.id
-            for ticket in db.scalars(select(SupportTicket).where(SupportTicket.customer_id == 1)).all()
-        }
+        existing_ticket_ids = {ticket.id for ticket in db.scalars(select(SupportTicket).where(SupportTicket.customer_id == 1)).all()}
 
         checkpointer = InMemorySaver()
 
@@ -148,7 +147,7 @@ def test_create_support_ticket_rejected_by_human() -> None:
 
         config = { "configurable": { "thread_id": "integration-create-support-ticket-rejected-test" }}
 
-        result = agent_graph.invoke(initial_state, config=config)
+        result = await agent_graph.ainvoke(initial_state, config=config)
 
         assert "__interrupt__" in result
 
@@ -157,13 +156,10 @@ def test_create_support_ticket_rejected_by_human() -> None:
         assert interrupt_data["type"] == "human_approval"
         assert interrupt_data["action_type"] == "create_support_ticket"
 
-        resumed_result = agent_graph.invoke(Command(resume="REJECTED"), config=config)
+        resumed_result = await agent_graph.ainvoke(Command(resume="REJECTED"), config=config)
 
         assert resumed_result["response"] == "The support ticket request was rejected."
 
-        created_ticket_ids = {
-            ticket.id
-            for ticket in db.scalars(select(SupportTicket).where(SupportTicket.customer_id == 1)).all()
-        }
+        created_ticket_ids = {ticket.id for ticket in db.scalars(select(SupportTicket).where(SupportTicket.customer_id == 1)).all()}
 
         assert created_ticket_ids == existing_ticket_ids
