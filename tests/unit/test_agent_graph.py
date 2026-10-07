@@ -1,5 +1,5 @@
 from langchain_core.documents import Document
-from src.agent.graph import determine_tool_type, execute_tool
+from src.agent.graph import determine_tool_type, execute_tool, execute_write_tool
 from src.auth.models import AuthenticatedUser
 from src.database.models import UserRole
 from src.rag.rag_service import RAGService
@@ -825,5 +825,55 @@ async def test_execute_tool_uses_mcp_for_product() -> None:
     mock_call_mcp_tool.assert_awaited_once_with(client=mock_client, tool_name="get_product_tool",
         arguments={
             "product_code": "AIS-200"
+        }
+    )
+
+
+@pytest.mark.anyio
+async def test_execute_write_tool_uses_mcp_for_create_support_ticket() -> None:
+    state = {
+        "user_query": "Create a support ticket for my machine.",
+        "authenticated_user": AuthenticatedUser(
+            user_id=1,
+            customer_id=1,
+            role=UserRole.CUSTOMER
+        ),
+        "route": "tool",
+        "retrieved_context": [],
+        "rag_available": True,
+        "tool_type": None,
+        "pending_action": PendingAction(
+            action_type="create_support_ticket",
+            description="Create a technical support ticket.",
+            parameters={
+                "category": "TECHNICAL",
+                "priority": "P2",
+                "subject": "Cooling system issue",
+                "description": "Machine temperature is above the expected threshold.",
+                "machine_serial": "AIS2-2025-00142"
+            }
+        ),
+        "tool_result": "",
+        "response": ""
+    }
+
+    mock_client = MagicMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("src.agent.graph.create_mcp_client", return_value=mock_client), patch("src.agent.graph.call_mcp_tool", new=AsyncMock(return_value=("Support ticket TCK-XXXX was created successfully."))) as mock_call_mcp_tool:
+
+        result = await execute_write_tool(state=state, db=MagicMock())
+
+    assert result["tool_result"] == "Support ticket TCK-XXXX was created successfully."
+
+    mock_call_mcp_tool.assert_awaited_once_with(client=mock_client, tool_name="create_support_ticket_tool",
+        arguments={
+            "customer_id": 1,
+            "category": "TECHNICAL",
+            "priority": "P2",
+            "subject": "Cooling system issue",
+            "description": "Machine temperature is above the expected threshold.",
+            "machine_serial": "AIS2-2025-00142"
         }
     )

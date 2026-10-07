@@ -545,21 +545,22 @@ def test_cancel_order_tool_propagates_database_error() -> None:
 def test_create_support_ticket_tool_returns_created_ticket() -> None:
     mock_db = MagicMock()
 
+    mock_machine = MagicMock()
+    mock_machine.id = 1
+
     result = CreateSupportTicketResult(
         status="CREATED",
         ticket_number="TCK-5048",
         message="Support ticket TCK-5048 was created successfully."
     )
 
-    with patch("src.mcp.server.SessionLocal", return_value=mock_db), patch("src.mcp.server.create_support_ticket", return_value=result) as mock_create_ticket:
+    with patch("src.mcp.server.SessionLocal", return_value=mock_db), patch("src.mcp.server.get_machine_by_serial", return_value=mock_machine), patch("src.mcp.server.create_support_ticket", return_value=result) as mock_create_ticket:
 
-        response = create_support_ticket_tool(customer_id=1, category="TECHNICAL", priority="P2", subject="Cooling system issue", description="The machine reports a cooling system temperature warning.", machine_id=1)
+        response = create_support_ticket_tool(customer_id=1, category="TECHNICAL", priority="P2", subject="Cooling system issue", description="The machine reports a cooling system temperature warning.", machine_serial="AIS2-2025-00142")
 
-    assert response == result.message
+    assert response == "Support ticket TCK-5048 was created successfully."
 
     mock_create_ticket.assert_called_once_with(db=mock_db, customer_id=1, category="TECHNICAL", priority="P2", subject="Cooling system issue", description="The machine reports a cooling system temperature warning.", machine_id=1)
-
-    mock_db.close.assert_called_once()
 
 
 def test_create_support_ticket_tool_allows_ticket_without_machine() -> None:

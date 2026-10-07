@@ -9,10 +9,9 @@ from src.agent.state import AgentState
 from src.logging.logger import logger
 from src.rag.rag_service import RAGService
 from src.tools.machine_tools import get_machine_tool
-from src.tools.order_tools import cancel_order_tool
 from src.services.maintenance_service import calculate_maintenance_status
 from src.tools.ticket_tools import get_machine_ticket_tool
-from src.tools.support_ticket_tools import (create_support_ticket_tool, update_support_ticket_tool)
+from src.tools.support_ticket_tools import update_support_ticket_tool
 from src.services.order_service import OrderItemRequest
 from sqlalchemy import select
 from src.database.models import Customer
@@ -416,14 +415,26 @@ async def execute_write_tool(state: AgentState, db: Session) -> AgentState:
         }
 
     if pending_action.action_type == "create_support_ticket":
-        machine_serial = pending_action.parameters.get("machine_serial")
+        user = state["authenticated_user"]
 
-        result = create_support_ticket_tool(db=db, user=state["authenticated_user"], category=pending_action.parameters["category"], priority=pending_action.parameters["priority"],
-            subject=pending_action.parameters["subject"], description=pending_action.parameters["description"], machine_serial=machine_serial)
+        if user.customer_id is None:
+            raise AuthorizationError("Authenticated user has no customer context.")
+
+        async with create_mcp_client() as client:
+            result = await call_mcp_tool(client=client, tool_name="create_support_ticket_tool",
+                arguments={
+                    "customer_id": user.customer_id,
+                    "category": pending_action.parameters["category"],
+                    "priority": pending_action.parameters["priority"],
+                    "subject": pending_action.parameters["subject"],
+                    "description": pending_action.parameters["description"],
+                    "machine_serial": pending_action.parameters.get("machine_serial")
+                }
+            )
 
         return {
             **state,
-            "tool_result": result.message
+            "tool_result": result
         }
 
     if pending_action.action_type == "update_support_ticket":

@@ -7,7 +7,7 @@ from src.services.machine_service import get_machine
 from src.services.maintenance_service import get_maintenance_history
 from src.services.ticket_service import get_machine_ticket
 from src.services.order_service import create_order, cancel_order, OrderItemRequest
-from src.services.support_ticket_service import create_support_ticket, update_support_ticket
+from src.services.support_ticket_service import create_support_ticket, update_support_ticket, get_machine_by_serial
 from src.services.product_service import get_product
 
 mcp = MCPServer(
@@ -146,10 +146,19 @@ def cancel_order_tool(order_id: str, customer_id: int) -> str:
 
 
 @mcp.tool()
-def create_support_ticket_tool(customer_id: int, category: str, priority: str, subject: str, description: str, machine_id: int | None = None) -> str:
+def create_support_ticket_tool(customer_id: int, category: str, priority: str, subject: str, description: str, machine_serial: str | None = None) -> str:
     """Create a support ticket for a customer."""
     db = SessionLocal()
     try:
+        machine_id = None
+
+        if machine_serial is not None:
+            machine = get_machine_by_serial(db=db, machine_serial=machine_serial, customer_id=customer_id)
+
+            if machine is None:
+                return "The specified machine was not found for the customer."
+
+            machine_id = machine.id
         result = create_support_ticket(db=db, customer_id=customer_id, category=category, priority=priority, subject=subject, description=description, machine_id=machine_id)
         return result.message
     finally:

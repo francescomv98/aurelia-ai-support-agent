@@ -147,12 +147,47 @@ async def test_mcp_client_can_create_order() -> None:
 @pytest.mark.anyio
 async def test_mcp_client_can_cancel_order() -> None:
     async with create_mcp_client() as client:
-        result = await client.call_tool("cancel_order_tool",
+        create_result = await client.call_tool("create_order_tool",
             {
-                "order_id": "ORD-10242",
-                "customer_id": 2,
+                "customer_id": 1,
+                "items": [
+                    {
+                        "product_code": "PROD-200",
+                        "quantity": 1
+                    }
+                ]
+            }
+        )
+
+        assert len(create_result.content) == 1
+
+        order_number = create_result.content[0].text.split()[1]
+
+        cancel_result = await client.call_tool("cancel_order_tool",
+            {
+                "order_id": order_number,
+                "customer_id": 1
+            }
+        )
+
+    assert len(cancel_result.content) == 1
+    assert cancel_result.content[0].text == f"Order {order_number} was cancelled successfully."
+
+
+@pytest.mark.anyio
+async def test_mcp_client_can_create_support_ticket() -> None:
+    async with create_mcp_client() as client:
+        result = await client.call_tool("create_support_ticket_tool",
+            {
+                "customer_id": 1,
+                "category": "TECHNICAL",
+                "priority": "P3",
+                "subject": "MCP integration test",
+                "description": "Test support ticket created through MCP.",
+                "machine_serial": "AIS2-2025-00142"
             }
         )
 
     assert len(result.content) == 1
-    assert result.content[0].text == "Order ORD-10242 was cancelled successfully."
+    assert result.content[0].text.startswith("Support ticket TCK-")
+    assert result.content[0].text.endswith("was created successfully.")
