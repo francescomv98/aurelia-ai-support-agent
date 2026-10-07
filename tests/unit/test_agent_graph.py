@@ -360,7 +360,8 @@ def test_human_approval_requires_pending_action():
         human_approval(state)
 
 
-def test_write_action_approved_reaches_execute_write_tool():
+@pytest.mark.anyio
+async def test_write_action_approved_reaches_execute_write_tool():
     chat_model = MagicMock()
 
     route_response = MagicMock()
@@ -418,7 +419,7 @@ def test_write_action_approved_reaches_execute_write_tool():
 
         config = { "configurable": { "thread_id": "test-write-action-approved" }}
 
-        result = graph.invoke(initial_state, config=config)
+        result = await graph.ainvoke(initial_state, config=config)
 
     mock_execute_write.assert_called_once()
     assert result["tool_result"] == "Order created successfully."

@@ -122,3 +122,24 @@ async def test_mcp_client_can_call_product_tool() -> None:
         "Capacity: 80 units per minute. "
         "Maintenance interval: 2000 operating hours."
     )
+
+
+@pytest.mark.anyio
+async def test_mcp_client_can_create_order() -> None:
+    async with create_mcp_client() as client:
+        result = await client.call_tool(
+            "create_order_tool",
+            {
+                "customer_id": 1,
+                "items": [
+                    {
+                        "product_code": "PROD-200",
+                        "quantity": 2
+                    }
+                ]
+            }
+        )
+
+    assert len(result.content) == 1
+    assert result.content[0].text.startswith("Order ORD-")
+    assert result.content[0].text.endswith("was created successfully.")

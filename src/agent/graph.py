@@ -9,7 +9,7 @@ from src.agent.state import AgentState
 from src.logging.logger import logger
 from src.rag.rag_service import RAGService
 from src.tools.machine_tools import get_machine_tool
-from src.tools.order_tools import (create_order_tool, cancel_order_tool)
+from src.tools.order_tools import cancel_order_tool
 from src.services.maintenance_service import calculate_maintenance_status
 from src.tools.ticket_tools import get_machine_ticket_tool
 from src.tools.support_ticket_tools import (create_support_ticket_tool, update_support_ticket_tool)
@@ -363,7 +363,7 @@ async def execute_tool(state: AgentState, db: Session, rag_service: RAGService) 
     }
 
 
-def execute_write_tool(state: AgentState, db: Session) -> AgentState:
+async def execute_write_tool(state: AgentState, db: Session) -> AgentState:
     pending_action = state["pending_action"]
 
     if pending_action is None:
@@ -373,19 +373,22 @@ def execute_write_tool(state: AgentState, db: Session) -> AgentState:
     logger.info("Executing approved write action", action_type=pending_action.action_type)
 
     if pending_action.action_type == "create_order":
-        items = [
-            OrderItemRequest(
-                product_code=item["product_code"],
-                quantity=item["quantity"]
-            )
-            for item in pending_action.parameters.get("items", [])
-        ]
+        user = state["authenticated_user"]
 
-        result = create_order_tool(db=db, user=state["authenticated_user"], items=items)
+        if user.customer_id is None:
+            raise AuthorizationError("Authenticated user has no customer context.")
+
+        async with create_mcp_client() as client:
+            result = await call_mcp_tool(client=client, tool_name="create_order_tool",
+                arguments={
+                    "customer_id": user.customer_id,
+                    "items": pending_action.parameters.get("items", [])
+                }
+            )
 
         return {
             **state,
-            "tool_result": result.message
+            "tool_result": result
         }
 
     if pending_action.action_type == "cancel_order":
@@ -502,6 +505,9 @@ def build_agent_graph(chat_model: ChatOpenAI, rag_service: RAGService, db: Sessi
     async def execute_tool_graph_node(state: AgentState) -> AgentState:
         return await execute_tool_node(state, db, rag_service)
     
+    async def execute_write_tool_graph_node(state: AgentState) -> AgentState:
+        return await execute_write_tool(state, db)
+    
     graph = StateGraph(AgentState)
 
     graph.add_node("route_request", lambda state: route_request(state, chat_model))
@@ -511,7 +517,7 @@ def build_agent_graph(chat_model: ChatOpenAI, rag_service: RAGService, db: Sessi
     graph.add_node("human_approval", human_approval)
     graph.add_node("authorize_action", authorize_action)
     graph.add_node("execute_tool", execute_tool_graph_node)
-    graph.add_node("execute_write_tool", lambda state: execute_write_tool(state, db))
+    graph.add_node("execute_write_tool", execute_write_tool_graph_node)
     graph.add_node("generate_response", lambda state: generate_response(state, chat_model, rag_service))
                    
     graph.add_conditional_edges(
