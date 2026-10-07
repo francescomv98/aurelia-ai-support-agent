@@ -287,3 +287,116 @@ def test_chat_resume_rejects_thread_without_pending_approval(mock_create_chat_mo
 
     finally:
         app.dependency_overrides.clear()
+
+
+def test_chat_resume_requires_authentication() -> None:
+    response = client.post("/chat/resume",
+        json={
+            "thread_id": "test-thread",
+            "decision": "APPROVED"
+        }
+    )
+
+    assert response.status_code == 401
+
+
+def test_chat_resume_rejects_invalid_decision() -> None:
+    app.dependency_overrides[get_current_user] = override_customer_user
+
+    try:
+        response = client.post("/chat/resume",
+            json={
+                "thread_id": "test-thread",
+                "decision": "MAYBE"
+            }
+        )
+
+        assert response.status_code == 422
+
+    finally:
+        app.dependency_overrides.clear()
+
+
+@patch("src.api.routes.chat.get_checkpointer")
+@patch("src.api.routes.chat.build_agent_graph")
+@patch("src.api.routes.chat.create_rag_service")
+@patch("src.api.routes.chat.create_chat_model")
+def test_chat_resume_rejects_thread_without_owner(mock_create_chat_model: MagicMock, mock_create_rag_service: MagicMock, mock_build_agent_graph: MagicMock, mock_get_checkpointer: MagicMock) -> None:
+    app.dependency_overrides[get_current_user] = override_customer_user
+
+    mock_graph = MagicMock()
+
+    state_snapshot = MagicMock()
+    state_snapshot.values = {}
+    state_snapshot.next = ("human_approval",)
+
+    mock_graph.aget_state = AsyncMock(return_value=state_snapshot)
+    mock_build_agent_graph.return_value = mock_graph
+
+    try:
+        response = client.post("/chat/resume",
+            json={
+                "thread_id": "invalid-owner-thread",
+                "decision": "APPROVED"
+            }
+        )
+
+        data = response.json()
+
+        assert response.status_code == 404
+        assert data["detail"] == "Chat thread not found."
+
+        mock_graph.ainvoke.assert_not_called()
+
+    finally:
+        app.dependency_overrides.clear()
+
+
+@patch("src.api.routes.chat.get_checkpointer")
+@patch("src.api.routes.chat.build_agent_graph")
+@patch("src.api.routes.chat.create_rag_service")
+@patch("src.api.routes.chat.create_chat_model")
+def test_chat_resume_with_rejection_returns_agent_response(mock_create_chat_model: MagicMock, mock_create_rag_service: MagicMock, mock_build_agent_graph: MagicMock, mock_get_checkpointer: MagicMock) -> None:
+    app.dependency_overrides[get_current_user] = override_customer_user
+
+    mock_graph = MagicMock()
+
+    state_snapshot = MagicMock()
+    state_snapshot.values = {"authenticated_user": override_customer_user()}
+    state_snapshot.next = ("human_approval")
+
+    mock_graph.aget_state = AsyncMock(return_value=state_snapshot)
+
+    mock_graph.ainvoke = AsyncMock(
+        return_value={
+            "tool_result": "The requested action was rejected.",
+            "response": "The requested action was rejected."
+        }
+    )
+
+    mock_build_agent_graph.return_value = mock_graph
+
+    try:
+        response = client.post("/chat/resume",
+            json={
+                "thread_id": "test-thread-rejected",
+                "decision": "REJECTED"
+            }
+        )
+
+        data = response.json()
+
+        assert response.status_code == 200
+        assert data["status"] == "completed"
+        assert data["response"] == "The requested action was rejected."
+        assert data["thread_id"] == "test-thread-rejected"
+
+        mock_graph.ainvoke.assert_called_once()
+
+        call_args = mock_graph.ainvoke.call_args
+
+        assert call_args.args[0].resume == "REJECTED"
+        assert call_args.kwargs["config"]["configurable"]["thread_id"] == "test-thread-rejected"
+
+    finally:
+        app.dependency_overrides.clear()
