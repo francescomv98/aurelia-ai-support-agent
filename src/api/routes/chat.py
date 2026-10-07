@@ -54,7 +54,7 @@ def create_rag_service() -> RAGService:
 
 
 @router.post("", response_model=ChatResponse)
-def chat(request: ChatRequest, current_user: AuthenticatedUser = Depends(get_current_user)) -> ChatResponse:
+async def chat(request: ChatRequest, current_user: AuthenticatedUser = Depends(get_current_user)) -> ChatResponse:
     """Process a user message through the support agent."""
 
     logger.info("Chat request received", user_id=current_user.user_id, role=current_user.role.value, message_length=len(request.message))
@@ -87,7 +87,7 @@ def chat(request: ChatRequest, current_user: AuthenticatedUser = Depends(get_cur
 
         config = { "configurable": { "thread_id": thread_id } }
 
-        result = agent_graph.invoke(initial_state, config=config)
+        result = await agent_graph.ainvoke(initial_state, config=config)
 
         logger.info("Chat request completed", user_id=current_user.user_id)
 

@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi.testclient import TestClient
 from main import app
 from src.api.dependencies import get_current_user
@@ -38,7 +38,7 @@ def test_chat_returns_agent_response(mock_create_chat_model: MagicMock, mock_cre
     app.dependency_overrides[get_current_user] = override_customer_user
 
     mock_graph = MagicMock()
-    mock_graph.invoke.return_value = { "response": "The status of order ORD-10245 is SHIPPED." }
+    mock_graph.ainvoke = AsyncMock(return_value={"response": "The status of order ORD-10245 is SHIPPED."})
 
     mock_build_agent_graph.return_value = mock_graph
 
@@ -53,7 +53,7 @@ def test_chat_returns_agent_response(mock_create_chat_model: MagicMock, mock_cre
         mock_create_chat_model.assert_called_once()
         mock_create_rag_service.assert_called_once()
         mock_build_agent_graph.assert_called_once()
-        mock_graph.invoke.assert_called_once()
+        mock_graph.ainvoke.assert_called_once()
     finally:
         app.dependency_overrides.clear()
 
