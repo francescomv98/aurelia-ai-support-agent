@@ -22,6 +22,7 @@ class CreateSupportTicketAction(BaseModel):
     subject: str = Field(description="A concise subject describing the support issue.")
     description: str = Field(description="A clear description of the issue reported by the customer.")
     machine_serial: str | None = Field(default=None, description="The machine serial number explicitly mentioned by the customer, if applicable.")
+    customer_id: int | None = Field(default=None, description="The target customer ID explicitly requested by the customer, if applicable. For example, 'customer 2' means customer ID 2.")
 
 
 class UpdateSupportTicketAction(BaseModel):
@@ -192,6 +193,12 @@ Do not invent products or quantities.
     - a concise subject
     - a clear description of the issue
     - the machine serial number if explicitly mentioned
+    - the target customer ID if explicitly requested
+
+    For the target customer ID:
+    - If the customer explicitly mentions a customer number, extract its numeric ID.
+    - For example, "customer 2" means customer ID 2.
+    - If no target customer is explicitly mentioned, return null.
 
     Do not invent information that is not present in the customer request.
     """
@@ -205,7 +212,8 @@ Do not invent products or quantities.
                 "priority": action.priority,
                 "subject": action.subject,
                 "description": action.description,
-                "machine_serial": action.machine_serial
+                "machine_serial": action.machine_serial,
+                "customer_id": action.customer_id
             }
         )
 

@@ -206,3 +206,31 @@ async def test_mcp_client_can_update_support_ticket() -> None:
 
     assert len(result.content) == 1
     assert result.content[0].text == "Support ticket TCK-5021 was updated successfully."
+
+
+@pytest.mark.anyio
+async def test_mcp_client_can_call_machine_status_tool() -> None:
+    async with create_mcp_client() as client:
+        result = await client.call_tool("get_machine_status_tool",
+            {
+                "machine_serial": "AIS2-2025-00142",
+                "customer_id": 1
+            }
+        )
+
+    assert len(result.content) == 1
+    assert result.content[0].text == "Machine AIS2-2025-00142 is an AIS-200 with 1734 operating hours."
+
+
+@pytest.mark.anyio
+async def test_mcp_machine_tool_schema() -> None:
+    async with create_mcp_client() as client:
+        result = await client.list_tools()
+
+    for tool in result.tools:
+        if tool.name == "get_machine_status_tool":
+            print("\nMACHINE TOOL:")
+            print(tool)
+            print("\nINPUT SCHEMA:")
+            print(tool.input_schema)
+            break

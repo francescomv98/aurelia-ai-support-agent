@@ -502,6 +502,14 @@ the requested enterprise operation.
 
 Do not invent information.
 
+When the documentation contains safety warnings, prohibitions,
+mandatory instructions, thresholds, or other safety constraints,
+preserve them explicitly in your answer when they are relevant
+to the customer's question.
+
+Do not omit, weaken, or contradict safety-critical instructions.
+Prioritize safety-critical instructions over brevity.
+
 Customer question:
 {state["user_query"]}
 

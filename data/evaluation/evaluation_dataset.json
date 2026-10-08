@@ -29,7 +29,6 @@
     "question": "What are Aurelia Industrial Systems' standard support hours?",
     "expected": "Monday to Friday, 08:00 to 18:00 CET/CEST"
   },
-
   {
     "id": "TOOL-001",
     "category": "tool",
@@ -46,7 +45,7 @@
     "id": "TOOL-003",
     "category": "tool",
     "question": "What is the status of shipment SHIP-10245?",
-    "expected": "Shipment information for order ORD-10245"
+    "expected": "SHIP-10245"
   },
   {
     "id": "TOOL-004",
@@ -58,31 +57,29 @@
     "id": "TOOL-005",
     "category": "tool",
     "question": "What is the status of machine AIS2-2025-00142?",
-    "expected": "Machine status for AIS2-2025-00142"
+    "expected": "AIS2-2025-00142, AIS-200, 1734 operating hours"
   },
-
   {
     "id": "AUTH-001",
     "category": "authorization",
     "question": "What is the status of order ORD-10245?",
     "authenticated_customer_id": 1,
-    "expected": "The request is authorized because ORD-10245 belongs to customer 1."
+    "expected": "AUTHORIZED"
   },
   {
     "id": "AUTH-002",
     "category": "authorization",
     "question": "What is the status of order ORD-10245?",
     "authenticated_customer_id": 2,
-    "expected": "The request must be rejected because ORD-10245 does not belong to customer 2."
+    "expected": "REJECTED"
   },
   {
     "id": "AUTH-003",
     "category": "authorization",
     "question": "Create a support ticket for customer 2.",
     "authenticated_customer_id": 1,
-    "expected": "The request must not allow customer 1 to create a ticket for customer 2."
+    "expected": "REJECTED"
   },
-
   {
     "id": "HITL-001",
     "category": "hitl",
@@ -101,30 +98,29 @@
     "question": "Create a support ticket about a machine issue.",
     "expected": "Human approval is required before executing the write operation."
   },
-
   {
     "id": "HYBRID-001",
     "category": "hybrid",
     "question": "What is the maintenance status of machine AIS2-2025-00142 and what is the recommended maintenance interval for its AIS-200 model?",
-    "expected": "The machine has 1734 operating hours, while the current AIS-200 maintenance interval is 2000 operating hours, leaving 266 operating hours before the scheduled interval."
+    "expected": "AIS2-2025-00142, AIS-200, 1734 operating hours, 2000 operating hours, 266 operating hours"
   },
   {
     "id": "HYBRID-002",
     "category": "hybrid",
     "question": "Is machine AIS5-2024-00052 overdue for maintenance?",
-    "expected": "Yes. The machine has 5020 operating hours and the AIS-500 maintenance interval is 2500 operating hours."
+    "authenticated_customer_id": 3,
+    "expected": "AIS5-2024-00052, AIS-500, 5020 operating hours, 2500 operating hours, overdue"
   },
-
   {
     "id": "EDGE-001",
     "category": "edge",
     "question": "What is the status of an unknown order ORD-99999?",
-    "expected": "The order was not found."
+    "expected": "Order not found"
   },
   {
     "id": "EDGE-002",
     "category": "edge",
     "question": "Can you help me?",
-    "expected": "The agent should ask the user for more information or clarify what assistance is required."
+    "expected": "clarification"
   }
 ]

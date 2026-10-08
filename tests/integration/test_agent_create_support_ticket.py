@@ -7,6 +7,7 @@ from src.agent.graph import build_agent_graph
 from src.auth.models import AuthenticatedUser, UserRole
 from src.database.models import Machine, SupportTicket
 from src.database.session import SessionLocal
+from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 
 @pytest.mark.integration
 @pytest.mark.anyio
@@ -22,6 +23,7 @@ async def test_create_support_ticket_through_agent_workflow() -> None:
     action_response.subject = "Cooling temperature too high"
     action_response.description = "The cooling system temperature is above the expected threshold."
     action_response.machine_serial = "AIS2-2025-00142"
+    action_response.customer_id = None
 
     chat_model.with_structured_output.return_value.invoke.side_effect = [ route_response, action_response ]
 
@@ -40,7 +42,7 @@ async def test_create_support_ticket_through_agent_workflow() -> None:
 
         assert machine is not None
 
-        checkpointer = InMemorySaver()
+        checkpointer = InMemorySaver(serde=JsonPlusSerializer())
 
         agent_graph = build_agent_graph(chat_model=chat_model, rag_service=rag_service, db=db, checkpointer=checkpointer)
 
@@ -105,6 +107,7 @@ async def test_create_support_ticket_rejected_by_human() -> None:
     action_response.subject = "Cooling temperature too high"
     action_response.description = "The cooling system temperature is above the expected threshold."
     action_response.machine_serial = "AIS2-2025-00142"
+    action_response.customer_id = None
 
     chat_model.with_structured_output.return_value.invoke.side_effect = [ route_response, action_response]
 
@@ -125,7 +128,7 @@ async def test_create_support_ticket_rejected_by_human() -> None:
 
         existing_ticket_ids = {ticket.id for ticket in db.scalars(select(SupportTicket).where(SupportTicket.customer_id == 1)).all()}
 
-        checkpointer = InMemorySaver()
+        checkpointer = InMemorySaver(serde=JsonPlusSerializer())
 
         agent_graph = build_agent_graph(chat_model=chat_model, rag_service=rag_service, db=db, checkpointer=checkpointer)
 

@@ -37,11 +37,11 @@ def get_machine(db: Session, machine_serial: str, customer_id: int) -> MachineRe
         return MachineResult(
             status="FOUND",
             machine_serial=machine.serial_number,
-            model=machine.model,
+            model=machine.product.name,
             operating_hours=machine.operating_hours,
             message=(
                 f"Machine {machine.serial_number} is an "
-                f"{machine.model} with "
+                f"{machine.product.name} with "
                 f"{machine.operating_hours} operating hours."
             )
         )
