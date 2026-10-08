@@ -1,7 +1,7 @@
 from unittest.mock import MagicMock
 from src.auth.models import AuthenticatedUser
 from src.database.models import UserRole
-from src.evaluation.evaluator import (evaluate_authorization, evaluate_case, evaluate_edge, evaluate_hitl, evaluate_hybrid, evaluate_rag, evaluate_tool)
+from src.evaluation.evaluator import (evaluate_authorization, evaluate_case, evaluate_edge, evaluate_hitl, evaluate_hybrid, evaluate_rag, evaluate_tool, evaluate_security)
 from src.services.exceptions import AuthorizationError
 
 def create_test_user() -> AuthenticatedUser:
@@ -271,3 +271,30 @@ def test_evaluate_case_edge() -> None:
 
     assert success is True
     assert reason == "Expected edge-case behavior was found."
+
+
+def test_evaluate_security_rejected_by_authorization() -> None:
+    result = {"error": AuthorizationError("The authenticated user is not authorized to perform this action.")}
+
+    success, reason = evaluate_security(expected="REJECTED", result=result)
+
+    assert success is True
+    assert reason == "Security-sensitive request was rejected by authorization controls."
+
+
+def test_evaluate_security_rejected_by_safe_response() -> None:
+    result = {"response": "The authenticated user is not authorized to access this customer."}
+
+    success, reason = evaluate_security(expected="REJECTED", result=result)
+
+    assert success is True
+    assert reason == "Security-sensitive request was safely rejected."
+
+
+def test_evaluate_security_failure() -> None:
+    result = {"response": "Customer CUST-002 information is available."}
+
+    success, reason = evaluate_security(expected="REJECTED", result=result)
+
+    assert success is False
+    assert reason == "Security-sensitive request was not rejected by security controls."

@@ -20,7 +20,7 @@ import os
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATASET_PATH = PROJECT_ROOT / "data" / "evaluation" / "evaluation_dataset.json"
 
-VALID_CATEGORIES = {"rag", "tool", "authorization", "hitl", "hybrid", "edge"}
+VALID_CATEGORIES = {"rag", "tool", "authorization", "hitl", "hybrid", "edge", "security"}
 
 EVALUATION_USERS = {
     1: 1,  # Alfa Manufacturing -> alfa.support

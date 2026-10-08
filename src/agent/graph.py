@@ -19,6 +19,7 @@ from src.database.models import Customer
 from src.agent.action_preparation import prepare_action
 from src.agent.human_approval import request_human_approval
 from src.agent.authorization import authorize_action
+from src.security.authorization import require_customer_access
 from src.mcp.client import create_mcp_client, call_mcp_tool
 
 def retrieve_context(state: AgentState, rag_service: RAGService) -> AgentState:
@@ -345,6 +346,8 @@ async def execute_tool(state: AgentState, db: Session, rag_service: RAGService) 
 
             customer_id = customer.id
 
+        require_customer_access(user, customer_id)
+        
         async with create_mcp_client() as client:
             result = await call_mcp_tool(client=client, tool_name="get_customer_tool",
                 arguments={ "customer_id": customer_id }

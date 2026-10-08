@@ -5,8 +5,8 @@ from src.services.shipment_service import get_shipment
 from src.services.machine_service import get_machine
 from src.services.maintenance_service import get_maintenance_history
 from src.services.ticket_service import get_machine_ticket
-from src.services.order_service import create_order, cancel_order, OrderItemRequest
-from src.services.support_ticket_service import create_support_ticket, update_support_ticket, get_machine_by_serial, get_order_status
+from src.services.order_service import create_order, cancel_order, get_order_status, OrderItemRequest
+from src.services.support_ticket_service import create_support_ticket, update_support_ticket, get_machine_by_serial
 from src.services.product_service import get_product
 
 mcp = MCPServer(
