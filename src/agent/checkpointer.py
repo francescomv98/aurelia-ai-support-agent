@@ -1,22 +1,32 @@
 import os
 from dotenv import load_dotenv
+from psycopg.rows import dict_row
+from psycopg_pool import ConnectionPool, AsyncConnectionPool
 from langgraph.checkpoint.postgres import PostgresSaver
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
-from psycopg import AsyncConnection
-from psycopg_pool import ConnectionPool
 
 load_dotenv()
 
 
 def create_checkpointer() -> PostgresSaver:
+    """Create the synchronous PostgreSQL LangGraph checkpointer."""
+
     database_url = os.getenv("DATABASE_URL")
 
     if not database_url:
         raise RuntimeError("DATABASE_URL environment variable is not set.")
 
-    checkpointer_url = database_url.replace("postgresql+psycopg://", "postgres://")
+    checkpointer_url = database_url.replace(
+        "postgresql+psycopg://",
+        "postgres://"
+    )
 
-    connection_pool = ConnectionPool(conninfo=checkpointer_url, kwargs={"autocommit": True})
+    connection_pool = ConnectionPool(
+        conninfo=checkpointer_url,
+        kwargs={
+            "autocommit": True,
+        },
+    )
 
     checkpointer = PostgresSaver(connection_pool)
     checkpointer.setup()
@@ -24,7 +34,9 @@ def create_checkpointer() -> PostgresSaver:
     return checkpointer
 
 
-async def create_async_checkpointer() -> tuple[AsyncPostgresSaver, AsyncConnection]:
+async def create_async_checkpointer() -> tuple[AsyncPostgresSaver, AsyncConnectionPool]:
+    """Create the asynchronous PostgreSQL LangGraph checkpointer."""
+
     database_url = os.getenv("DATABASE_URL")
 
     if not database_url:
@@ -32,10 +44,19 @@ async def create_async_checkpointer() -> tuple[AsyncPostgresSaver, AsyncConnecti
 
     checkpointer_url = database_url.replace("postgresql+psycopg://", "postgres://")
 
-    connection = await AsyncConnection.connect(checkpointer_url, autocommit=True)
+    connection_pool = AsyncConnectionPool(
+        conninfo=checkpointer_url,
+        kwargs={
+            "autocommit": True,
+            "prepare_threshold": 0,
+            "row_factory": dict_row
+        }
+    )
 
-    checkpointer = AsyncPostgresSaver(connection)
+    await connection_pool.open()
+
+    checkpointer = AsyncPostgresSaver(connection_pool)
 
     await checkpointer.setup()
 
-    return checkpointer, connection
+    return checkpointer, connection_pool

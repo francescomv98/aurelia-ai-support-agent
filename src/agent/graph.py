@@ -3,7 +3,7 @@ import openai
 from typing import Literal
 from langchain_openai import ChatOpenAI
 from langgraph.graph import START, END, StateGraph
-from langgraph.checkpoint.postgres import PostgresSaver
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
@@ -544,7 +544,7 @@ async def execute_tool_node(state: AgentState, db: Session, rag_service: RAGServ
     return await execute_tool(state, db, rag_service)
 
 
-def build_agent_graph(chat_model: ChatOpenAI, rag_service: RAGService, db: Session, checkpointer: PostgresSaver):
+def build_agent_graph(chat_model: ChatOpenAI, rag_service: RAGService, db: Session, checkpointer: AsyncPostgresSaver):
     """Build the Aurelia support agent graph."""
 
     async def execute_tool_graph_node(state: AgentState) -> AgentState:

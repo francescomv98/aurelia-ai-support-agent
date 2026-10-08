@@ -1,9 +1,8 @@
 import os
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-from functools import lru_cache
 from src.agent.graph import build_agent_graph
-from src.agent.checkpointer import create_checkpointer
+from src.agent.checkpointer import create_async_checkpointer
 from src.api.dependencies import get_current_user
 from src.auth.models import AuthenticatedUser
 from src.database.session import SessionLocal
@@ -19,10 +18,19 @@ import uuid
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
-@lru_cache(maxsize=1)
-def get_checkpointer():
-    """Create and cache the PostgreSQL LangGraph checkpointer."""
-    return create_checkpointer()
+_checkpointer = None
+_checkpointer_pool = None
+
+
+async def get_checkpointer():
+    """Create and cache the asynchronous PostgreSQL LangGraph checkpointer."""
+    global _checkpointer, _checkpointer_pool
+
+    if _checkpointer is None:
+        _checkpointer, _checkpointer_pool = await create_async_checkpointer()
+
+    return _checkpointer
+
 
 class ChatRequest(BaseModel):
     """Request payload for the support agent."""
@@ -88,7 +96,7 @@ async def chat(request: ChatRequest, current_user: AuthenticatedUser = Depends(g
     try:
         chat_model = create_chat_model()
         rag_service = create_rag_service()
-        checkpointer = get_checkpointer()
+        checkpointer = await get_checkpointer()
 
         agent_graph = build_agent_graph(chat_model=chat_model, rag_service=rag_service, db=db, checkpointer=checkpointer)
 
@@ -152,7 +160,7 @@ async def resume_chat(request: ChatResumeRequest, current_user: AuthenticatedUse
     try:
         chat_model = create_chat_model()
         rag_service = create_rag_service()
-        checkpointer = get_checkpointer()
+        checkpointer = await get_checkpointer()
 
         agent_graph = build_agent_graph(chat_model=chat_model, rag_service=rag_service, db=db, checkpointer=checkpointer)
 
