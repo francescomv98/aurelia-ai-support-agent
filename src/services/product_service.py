@@ -2,9 +2,9 @@ from typing import Literal
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 from src.database.models import Product
 from src.logging.logger import logger
-from sqlalchemy.exc import SQLAlchemyError
 from src.services.exceptions import DatabaseError
 
 class ProductResult(BaseModel):

@@ -1,10 +1,9 @@
 from unittest.mock import MagicMock
 import pytest
-from src.auth.models import AuthenticatedUser
-from src.auth.models import UserRole
+from src.auth.models import AuthenticatedUser, UserRole
 from src.services.shipment_service import ShipmentResult
-from src.tools.shipment_tools import get_shipment_tool
 from src.services.exceptions import AuthorizationError, ValidationError
+from src.tools.shipment_tools import get_shipment_tool
 
 def test_customer_can_access_own_shipment() -> None:
     db = MagicMock()

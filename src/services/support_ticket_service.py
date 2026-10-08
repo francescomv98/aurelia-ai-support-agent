@@ -3,11 +3,10 @@ from typing import Literal
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 from src.database.models import Machine, SupportTicket
 from src.logging.logger import logger
-from src.services.exceptions import ValidationError
-from sqlalchemy.exc import SQLAlchemyError
-from src.services.exceptions import DatabaseError
+from src.services.exceptions import ValidationError, DatabaseError
 
 class CreateSupportTicketResult(BaseModel):
     """Result returned when creating a support ticket."""

@@ -1,10 +1,9 @@
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 import pytest
 from src.auth.models import AuthenticatedUser, UserRole
 from src.database.models import UserRole
-from src.services.support_ticket_service import CreateSupportTicketResult
 from src.tools.support_ticket_tools import create_support_ticket_tool, update_support_ticket_tool
-from unittest.mock import MagicMock
+from src.services.support_ticket_service import CreateSupportTicketResult
 from src.services.exceptions import AuthorizationError, ValidationError
 
 class FakeSupportTicket:

@@ -1,13 +1,11 @@
 from typing import Literal
 from pydantic import BaseModel
 from src.logging.logger import logger
-from src.services.exceptions import ValidationError
-from datetime import datetime
+from src.services.exceptions import ValidationError, DatabaseError
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from src.database.models import MaintenanceRecord, Machine
-from src.services.exceptions import DatabaseError
 
 class MaintenanceResult(BaseModel):
     """Result returned by the maintenance calculation service."""

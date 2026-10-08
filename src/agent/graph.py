@@ -3,22 +3,22 @@ import openai
 from typing import Literal
 from langchain_openai import ChatOpenAI
 from langgraph.graph import START, END, StateGraph
+from langgraph.checkpoint.postgres import PostgresSaver
+from sqlalchemy import select
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 from src.agent.router import route_request
 from src.agent.state import AgentState
 from src.logging.logger import logger
 from src.rag.rag_service import RAGService
 from src.tools.machine_tools import get_machine_tool
-from src.services.maintenance_service import calculate_maintenance_status
 from src.tools.ticket_tools import get_machine_ticket_tool
-from sqlalchemy import select
+from src.services.maintenance_service import calculate_maintenance_status
+from src.services.exceptions import DatabaseError, LLMError, AuthorizationError
 from src.database.models import Customer
-from langgraph.checkpoint.postgres import PostgresSaver
 from src.agent.action_preparation import prepare_action
 from src.agent.human_approval import request_human_approval
 from src.agent.authorization import authorize_action
-from sqlalchemy.exc import SQLAlchemyError
-from src.services.exceptions import DatabaseError, LLMError, AuthorizationError
 from src.mcp.client import create_mcp_client, call_mcp_tool
 
 def retrieve_context(state: AgentState, rag_service: RAGService) -> AgentState:

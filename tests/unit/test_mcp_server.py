@@ -7,10 +7,9 @@ from src.mcp.server import (get_customer_tool, get_machine_status_tool, get_orde
 from src.services.machine_service import MachineResult
 from src.services.shipment_service import ShipmentResult
 from src.services.customer_service import CustomerResult
-from src.services.order_service import OrderResult
 from src.services.maintenance_service import MaintenanceHistoryResult
 from src.services.ticket_service import TicketResult
-from src.services.order_service import CreateOrderResult, OrderItemRequest, CancelOrderResult
+from src.services.order_service import CreateOrderResult, OrderItemRequest, CancelOrderResult, OrderResult
 from src.services.support_ticket_service import CreateSupportTicketResult, UpdateSupportTicketResult
 
 @patch("src.mcp.server.SessionLocal")

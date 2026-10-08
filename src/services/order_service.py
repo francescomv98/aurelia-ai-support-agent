@@ -1,14 +1,13 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 from src.database.models import Order, OrderItem, Product
 from typing import Literal
 from pydantic import BaseModel
 from src.logging.logger import logger
 from decimal import Decimal
 from datetime import datetime, timezone
-from src.services.exceptions import ValidationError
-from sqlalchemy.exc import SQLAlchemyError
-from src.services.exceptions import DatabaseError
+from src.services.exceptions import ValidationError, DatabaseError
 
 class OrderResult(BaseModel):
     """Result returned by the order service."""

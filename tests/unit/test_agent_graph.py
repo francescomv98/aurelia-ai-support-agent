@@ -1,5 +1,4 @@
-from langchain_core.documents import Document
-from src.agent.graph import determine_tool_type, execute_tool, execute_write_tool
+from src.agent.graph import determine_tool_type, execute_tool, execute_write_tool, build_agent_graph, human_approval, generate_response
 from src.auth.models import AuthenticatedUser
 from src.database.models import UserRole
 from src.rag.rag_service import RAGService
@@ -7,8 +6,8 @@ from src.services.machine_service import MachineResult
 from src.services.ticket_service import TicketResult
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from src.agent.graph import build_agent_graph, human_approval, generate_response
 from langgraph.checkpoint.memory import InMemorySaver
+from langchain_core.documents import Document
 from langchain_openai import ChatOpenAI
 from src.services.exceptions import AuthorizationError, LLMError, DatabaseError
 from src.agent.action_preparation import CreateOrderAction, OrderItem

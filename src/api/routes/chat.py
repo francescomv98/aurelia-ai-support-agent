@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from functools import lru_cache
 from src.agent.graph import build_agent_graph
+from src.agent.checkpointer import create_checkpointer
 from src.api.dependencies import get_current_user
 from src.auth.models import AuthenticatedUser
 from src.database.session import SessionLocal
@@ -12,7 +13,6 @@ from src.rag.embedding import create_embeddings
 from src.rag.rag_service import RAGService
 from src.rag.retriever import Retriever
 from src.rag.vector_store import VectorStore
-from src.agent.checkpointer import create_checkpointer
 from langgraph.types import Command
 from typing import Literal
 import uuid

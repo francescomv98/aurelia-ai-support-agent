@@ -2,12 +2,12 @@ import pytest
 from unittest.mock import MagicMock
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import Command
+from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 from sqlalchemy import select
 from src.agent.graph import build_agent_graph
 from src.auth.models import AuthenticatedUser, UserRole
 from src.database.models import Machine, SupportTicket
 from src.database.session import SessionLocal
-from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 
 @pytest.mark.integration
 @pytest.mark.anyio

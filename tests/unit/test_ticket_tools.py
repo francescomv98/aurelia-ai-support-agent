@@ -1,8 +1,8 @@
 import pytest
 from src.auth.models import AuthenticatedUser
 from src.database.models import UserRole
-from src.services.ticket_service import TicketResult
 from src.tools.ticket_tools import get_machine_ticket_tool
+from src.services.ticket_service import TicketResult
 from src.services.exceptions import AuthorizationError, ValidationError
 
 def test_customer_can_access_own_machine_ticket(monkeypatch) -> None:

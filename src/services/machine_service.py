@@ -1,10 +1,10 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 from src.database.models import Machine
 from src.logging.logger import logger
 from typing import Literal
 from pydantic import BaseModel
-from sqlalchemy.exc import SQLAlchemyError
 from src.services.exceptions import DatabaseError
 
 class MachineResult(BaseModel):
