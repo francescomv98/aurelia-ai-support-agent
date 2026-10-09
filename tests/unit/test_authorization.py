@@ -1,5 +1,5 @@
 import pytest
-from src.auth.models import AuthenticatedUser, UserRole
+from src.auth.models import AuthenticatedUser
 from src.database.models import UserRole
 from src.security.authorization import (require_customer_access, require_role)
 from unittest.mock import MagicMock

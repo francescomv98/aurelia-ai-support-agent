@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 from typing import Any
 from langgraph.types import Command
-from src.agent.checkpointer import create_async_checkpointer
+from langgraph.checkpoint.memory import MemorySaver
 from src.agent.graph import build_agent_graph
 from src.agent.state import AgentState
 from src.auth.models import AuthenticatedUser, UserRole
@@ -163,26 +163,19 @@ def create_evaluation_rag_service() -> RAGService:
     return RAGService(retriever=retriever)
 
 
-async def run_live_evaluation_case(case: dict, user: AuthenticatedUser) -> dict:
-    db = SessionLocal()
-    checkpointer = None
-    connection = None
 
-    try:
-        checkpointer, connection = await create_async_checkpointer()
+async def run_live_evaluation_case(
+    agent_graph: Any,
+    case: dict,
+    user: AuthenticatedUser,
+) -> dict:
+    return await execute_evaluation_case(
+        agent_graph=agent_graph,
+        case=case,
+        user=user,
+    )
 
-        chat_model = create_chat_model()
-        rag_service = create_evaluation_rag_service()
 
-        agent_graph = build_agent_graph(chat_model=chat_model, rag_service=rag_service, db=db, checkpointer=checkpointer)
-
-        return await execute_evaluation_case(agent_graph=agent_graph, case=case, user=user)
-
-    finally:
-        if connection is not None:
-            await connection.close()
-
-        db.close()
 
 
 async def run_live_evaluation() -> int:
@@ -195,61 +188,96 @@ async def run_live_evaluation() -> int:
     print()
 
     results = []
+    db = None
 
-    for case in dataset:
-        print(f"Running {case['id']}...")
+    try:
+        db = SessionLocal()
+        checkpointer = MemorySaver()
+        chat_model = create_chat_model()
+        rag_service = create_evaluation_rag_service()
 
-        is_valid, error = validate_case(case)
+        agent_graph = build_agent_graph(
+            chat_model=chat_model,
+            rag_service=rag_service,
+            db=db,
+            checkpointer=checkpointer,
+        )
 
-        if not is_valid:
-            result = {
-                "id": case.get("id", "UNKNOWN"),
-                "category": case.get("category", "UNKNOWN"),
-                "question": case.get("question", ""),
-                "expected": case.get("expected", ""),
-                "passed": False,
-                "reason": error,
-                "response": "",
-                "tool_result": ""
-            }
+        for case in dataset:
+            print(f"Running {case['id']}...")
 
-            results.append(result)
-            print(f"[FAIL] {case.get('id', 'UNKNOWN')}: {error}")
-            continue
+            is_valid, error = validate_case(case)
 
-        user = create_evaluation_user(case)
+            if not is_valid:
+                result = {
+                    "id": case.get("id", "UNKNOWN"),
+                    "category": case.get("category", "UNKNOWN"),
+                    "question": case.get("question", ""),
+                    "expected": case.get("expected", ""),
+                    "passed": False,
+                    "reason": error,
+                    "response": "",
+                    "tool_result": "",
+                }
 
-        execution_result = await run_live_evaluation_case(case=case, user=user)
+                results.append(result)
+                print(f"[FAIL] {case.get('id', 'UNKNOWN')}: {error}")
+                continue
 
-        evaluation_result = evaluate_evaluation_case(case=case, result=execution_result)
+            user = create_evaluation_user(case)
 
-        results.append(evaluation_result)
+            execution_result = await run_live_evaluation_case(
+                agent_graph=agent_graph,
+                case=case,
+                user=user,
+            )
 
-        status = "PASS" if evaluation_result["passed"] else "FAIL"
+            evaluation_result = evaluate_evaluation_case(
+                case=case,
+                result=execution_result,
+            )
 
-        print(f"[{status}] {case['id']}: {evaluation_result['reason']}")
+            results.append(evaluation_result)
 
-    passed = sum(1 for result in results if result["passed"])
-    failed = len(results) - passed
+            status = "PASS" if evaluation_result["passed"] else "FAIL"
 
-    print()
-    print("=" * 50)
-    print("Live Evaluation Summary")
-    print("=" * 50)
-    print(f"Total:  {len(results)}")
-    print(f"Passed: {passed}")
-    print(f"Failed: {failed}")
-    print(f"Score:  {passed / len(results) * 100:.1f}%")
-    print()
+            print(
+                f"[{status}] {case['id']}: "
+                f"{evaluation_result['reason']}"
+            )
 
-    if failed:
-        print("Failed cases:")
-        for result in results:
-            if not result["passed"]:
-                print(f"- {result['id']}: {result['reason']}")
+        passed = sum(1 for result in results if result["passed"])
+        failed = len(results) - passed
+
+        print()
+        print("=" * 50)
+        print("Live Evaluation Summary")
+        print("=" * 50)
+        print(f"Total:  {len(results)}")
+        print(f"Passed: {passed}")
+        print(f"Failed: {failed}")
+
+        score = passed / len(results) * 100 if results else 0.0
+        print(f"Score:  {score:.1f}%")
         print()
 
-    return 0 if failed == 0 else 1
+        if failed:
+            print("Failed cases:")
+            for result in results:
+                if not result["passed"]:
+                    print(f"- {result['id']}: {result['reason']}")
+            print()
+
+        return 0 if failed == 0 else 1
+
+    except Exception:
+        logger.exception("Live evaluation initialization or execution failed")
+        return 1
+
+    finally:
+        if db is not None:
+            db.close()
+
 
 
 if __name__ == "__main__":

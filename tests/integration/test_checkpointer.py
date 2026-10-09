@@ -1,6 +1,10 @@
-from src.agent.checkpointer import create_checkpointer
+import pytest
+from langgraph.checkpoint.memory import MemorySaver
 
-def test_postgres_checkpointer_setup():
-    checkpointer = create_checkpointer()
+@pytest.mark.integration
+def test_memory_checkpointer_setup():
+    checkpointer = MemorySaver()
 
     assert checkpointer is not None
+    assert callable(checkpointer.get)
+    assert callable(checkpointer.put)

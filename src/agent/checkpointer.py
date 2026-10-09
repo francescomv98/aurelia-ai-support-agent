@@ -18,10 +18,7 @@ def create_checkpointer() -> PostgresSaver:
 
     checkpointer_url = database_url.replace("postgresql+psycopg://", "postgres://")
 
-    connection_pool = ConnectionPool(
-        conninfo=checkpointer_url,
-        kwargs={"autocommit": True}
-    )
+    connection_pool = ConnectionPool(conninfo=checkpointer_url, kwargs={"autocommit": True})
 
     checkpointer = PostgresSaver(connection_pool)
     checkpointer.setup()
@@ -51,7 +48,6 @@ async def create_async_checkpointer() -> tuple[AsyncPostgresSaver, AsyncConnecti
     await connection_pool.open()
 
     checkpointer = AsyncPostgresSaver(connection_pool)
-
     await checkpointer.setup()
 
     return checkpointer, connection_pool

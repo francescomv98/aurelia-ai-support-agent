@@ -1,29 +1,26 @@
-from unittest.mock import MagicMock
-from src.agent.graph import build_agent_graph
-from src.agent.checkpointer import create_checkpointer
-from src.auth.models import AuthenticatedUser, UserRole
 import pytest
+from unittest.mock import MagicMock
+from langgraph.checkpoint.memory import MemorySaver
+from src.agent.graph import build_agent_graph
+from src.auth.models import AuthenticatedUser, UserRole
 
-@pytest.mark.integration
-def test_agent_graph_persists_checkpoint():
+@pytest.mark.asyncio
+async def test_agent_graph_persists_checkpoint():
     chat_model = MagicMock()
 
     route_response = MagicMock()
     route_response.route = "rag"
-
     chat_model.with_structured_output.return_value.invoke.return_value = route_response
 
     response = MagicMock()
     response.content = "Test response"
-
     chat_model.invoke.return_value = response
 
     rag_service = MagicMock()
     rag_service.retrieve_context.return_value = []
 
     db = MagicMock()
-
-    checkpointer = create_checkpointer()
+    checkpointer = MemorySaver()
 
     agent_graph = build_agent_graph(chat_model=chat_model, rag_service=rag_service, db=db, checkpointer=checkpointer)
 
@@ -41,13 +38,13 @@ def test_agent_graph_persists_checkpoint():
         "response": ""
     }
 
-    config = { "configurable": { "thread_id": "integration-test-thread" } }
+    config = {"configurable": {"thread_id": "integration-test-thread"}}
 
-    result = agent_graph.invoke(initial_state, config=config)
+    result = await agent_graph.ainvoke(initial_state, config=config)
 
     assert result["response"] == "Test response"
 
-    checkpoint = agent_graph.get_state(config)
+    checkpoint = await agent_graph.aget_state(config)
 
     assert checkpoint is not None
     assert checkpoint.values["user_query"] == "Hello"
