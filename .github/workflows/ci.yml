@@ -12,10 +12,13 @@ jobs:
   tests:
     name: Run tests
     runs-on: ubuntu-latest
-
+    
     services:
       postgres:
         image: pgvector/pgvector:pg16
+        credentials:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
         env:
           POSTGRES_DB: aurelia
           POSTGRES_USER: aurelia

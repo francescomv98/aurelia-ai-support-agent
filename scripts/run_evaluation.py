@@ -163,19 +163,8 @@ def create_evaluation_rag_service() -> RAGService:
     return RAGService(retriever=retriever)
 
 
-
-async def run_live_evaluation_case(
-    agent_graph: Any,
-    case: dict,
-    user: AuthenticatedUser,
-) -> dict:
-    return await execute_evaluation_case(
-        agent_graph=agent_graph,
-        case=case,
-        user=user,
-    )
-
-
+async def run_live_evaluation_case(agent_graph: Any, case: dict, user: AuthenticatedUser) -> dict:
+    return await execute_evaluation_case(agent_graph=agent_graph, case=case, user=user)
 
 
 async def run_live_evaluation() -> int:
@@ -196,12 +185,7 @@ async def run_live_evaluation() -> int:
         chat_model = create_chat_model()
         rag_service = create_evaluation_rag_service()
 
-        agent_graph = build_agent_graph(
-            chat_model=chat_model,
-            rag_service=rag_service,
-            db=db,
-            checkpointer=checkpointer,
-        )
+        agent_graph = build_agent_graph(chat_model=chat_model, rag_service=rag_service, db=db, checkpointer=checkpointer)
 
         for case in dataset:
             print(f"Running {case['id']}...")
@@ -217,7 +201,7 @@ async def run_live_evaluation() -> int:
                     "passed": False,
                     "reason": error,
                     "response": "",
-                    "tool_result": "",
+                    "tool_result": ""
                 }
 
                 results.append(result)
@@ -226,16 +210,9 @@ async def run_live_evaluation() -> int:
 
             user = create_evaluation_user(case)
 
-            execution_result = await run_live_evaluation_case(
-                agent_graph=agent_graph,
-                case=case,
-                user=user,
-            )
+            execution_result = await run_live_evaluation_case(agent_graph=agent_graph, case=case, user=user)
 
-            evaluation_result = evaluate_evaluation_case(
-                case=case,
-                result=execution_result,
-            )
+            evaluation_result = evaluate_evaluation_case(case=case, result=execution_result)
 
             results.append(evaluation_result)
 
@@ -277,7 +254,6 @@ async def run_live_evaluation() -> int:
     finally:
         if db is not None:
             db.close()
-
 
 
 if __name__ == "__main__":
