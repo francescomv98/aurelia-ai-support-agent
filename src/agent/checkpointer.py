@@ -16,16 +16,11 @@ def create_checkpointer() -> PostgresSaver:
     if not database_url:
         raise RuntimeError("DATABASE_URL environment variable is not set.")
 
-    checkpointer_url = database_url.replace(
-        "postgresql+psycopg://",
-        "postgres://"
-    )
+    checkpointer_url = database_url.replace("postgresql+psycopg://", "postgres://")
 
     connection_pool = ConnectionPool(
         conninfo=checkpointer_url,
-        kwargs={
-            "autocommit": True,
-        },
+        kwargs={"autocommit": True}
     )
 
     checkpointer = PostgresSaver(connection_pool)
