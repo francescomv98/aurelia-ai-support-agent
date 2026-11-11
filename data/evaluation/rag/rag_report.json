@@ -1,0 +1,665 @@
+{
+  "reports": [
+    {
+      "stage": "ingestion",
+      "passed": true,
+      "checks": [
+        {
+          "name": "pdf_files_loaded",
+          "status": "PASS",
+          "value": 1.0,
+          "threshold": 1.0,
+          "level": "error",
+          "details": []
+        },
+        {
+          "name": "pages_with_text",
+          "status": "WARN",
+          "value": 0.9925,
+          "threshold": 1.0,
+          "level": "warning",
+          "details": [
+            "AIS-500_user_manual.pdf page 8"
+          ]
+        },
+        {
+          "name": "chunk_metadata_complete",
+          "status": "PASS",
+          "value": 1.0,
+          "threshold": 1.0,
+          "level": "error",
+          "details": []
+        },
+        {
+          "name": "chunks_within_size_limit",
+          "status": "PASS",
+          "value": 1.0,
+          "threshold": 1.0,
+          "level": "error",
+          "details": []
+        },
+        {
+          "name": "chunks_not_tiny",
+          "status": "PASS",
+          "value": 1.0,
+          "threshold": 0.95,
+          "level": "warning",
+          "details": []
+        },
+        {
+          "name": "unique_chunks",
+          "status": "PASS",
+          "value": 1.0,
+          "threshold": 1.0,
+          "level": "error",
+          "details": []
+        },
+        {
+          "name": "fact_coverage",
+          "status": "PASS",
+          "value": 1.0,
+          "threshold": 1.0,
+          "level": "error",
+          "details": []
+        },
+        {
+          "name": "vector_store_up_to_date",
+          "status": "PASS",
+          "value": 1.0,
+          "threshold": 1.0,
+          "level": "error",
+          "details": []
+        }
+      ],
+      "cases": [
+        {
+          "id": "ING-001",
+          "fact": "1,850 kg",
+          "source": "AIS-100_technical_specifications.pdf",
+          "passed": true,
+          "matching_chunks": 1
+        },
+        {
+          "id": "ING-002",
+          "fact": "400 VAC, three-phase, 50/60 Hz",
+          "source": "AIS-100_user_manual.pdf",
+          "passed": true,
+          "matching_chunks": 2
+        },
+        {
+          "id": "ING-003",
+          "fact": "Bypass the temperature protection",
+          "source": "AIS-200_user_manual.pdf",
+          "passed": true,
+          "matching_chunks": 1
+        },
+        {
+          "id": "ING-004",
+          "fact": "2,000 operating hours",
+          "source": "AIS-200_technical_specifications.pdf",
+          "passed": true,
+          "matching_chunks": 2
+        },
+        {
+          "id": "ING-005",
+          "fact": "OPC UA",
+          "source": "AIS-500_technical_specifications.pdf",
+          "passed": true,
+          "matching_chunks": 3
+        },
+        {
+          "id": "ING-006",
+          "fact": "2,500 operating hours",
+          "source": "AIS-500_user_manual.pdf",
+          "passed": true,
+          "matching_chunks": 2
+        },
+        {
+          "id": "ING-007",
+          "fact": "Via delle Industrie 42",
+          "source": "company_overview.pdf",
+          "passed": true,
+          "matching_chunks": 2
+        },
+        {
+          "id": "ING-008",
+          "fact": "08:00–18:00 CET/CEST",
+          "source": "customer_faq.pdf",
+          "passed": true,
+          "matching_chunks": 1
+        },
+        {
+          "id": "ING-009",
+          "fact": "Initial response target: 30 minutes",
+          "source": "customer_support_policy.pdf",
+          "passed": true,
+          "matching_chunks": 1
+        },
+        {
+          "id": "ING-010",
+          "fact": "2,000 − 1,734 = 266 operating hours",
+          "source": "preventive_maintenance.pdf",
+          "passed": true,
+          "matching_chunks": 1
+        },
+        {
+          "id": "ING-011",
+          "fact": "Cooling-system temperature above configured threshold",
+          "source": "troubleshooting_guide.pdf",
+          "passed": true,
+          "matching_chunks": 1
+        },
+        {
+          "id": "ING-012",
+          "fact": "24 months from the machine installation date",
+          "source": "warranty_policy.pdf",
+          "passed": true,
+          "matching_chunks": 2
+        },
+        {
+          "id": "ING-013",
+          "fact": "Security incidents must be escalated to IT & Security",
+          "source": "organizational_structure.pdf",
+          "passed": true,
+          "matching_chunks": 1
+        },
+        {
+          "id": "ING-014",
+          "fact": "Role-Based Access Control (RBAC)",
+          "source": "security_policy.pdf",
+          "passed": true,
+          "matching_chunks": 2
+        },
+        {
+          "id": "ING-015",
+          "fact": "Potential incidents must be reported even when the full scope of the incident is not yet known",
+          "source": "data_privacy_policy.pdf",
+          "passed": true,
+          "matching_chunks": 2
+        }
+      ]
+    },
+    {
+      "stage": "retrieval",
+      "passed": true,
+      "checks": [
+        {
+          "name": "vector_store_up_to_date",
+          "status": "PASS",
+          "value": 1.0,
+          "threshold": 1.0,
+          "level": "error",
+          "details": []
+        },
+        {
+          "name": "hit_rate",
+          "status": "PASS",
+          "value": 1.0,
+          "threshold": 0.9,
+          "level": "error",
+          "details": []
+        },
+        {
+          "name": "mrr",
+          "status": "PASS",
+          "value": 1.0,
+          "threshold": 0.75,
+          "level": "error",
+          "details": []
+        },
+        {
+          "name": "fact_recall",
+          "status": "PASS",
+          "value": 0.9375,
+          "threshold": 0.85,
+          "level": "error",
+          "details": [
+            "RET-005: missing ['Bypass the temperature protection']"
+          ]
+        },
+        {
+          "name": "context_precision",
+          "status": "PASS",
+          "value": 0.875,
+          "threshold": 0.5,
+          "level": "warning",
+          "details": []
+        }
+      ],
+      "cases": [
+        {
+          "id": "RET-001",
+          "question": "What is the preventive maintenance interval for the AIS-200?",
+          "hit": true,
+          "reciprocal_rank": 1.0,
+          "fact_recall": 1.0,
+          "context_precision": 1.0,
+          "retrieved_sources": [
+            "preventive_maintenance.pdf",
+            "customer_faq.pdf",
+            "AIS-200_technical_specifications.pdf",
+            "preventive_maintenance.pdf"
+          ],
+          "missing_facts": [],
+          "passed": true
+        },
+        {
+          "id": "RET-002",
+          "question": "How often does the AIS-100 need preventive maintenance?",
+          "hit": true,
+          "reciprocal_rank": 1.0,
+          "fact_recall": 1.0,
+          "context_precision": 0.75,
+          "retrieved_sources": [
+            "AIS-100_technical_specifications.pdf",
+            "preventive_maintenance.pdf",
+            "preventive_maintenance.pdf",
+            "AIS-200_technical_specifications.pdf"
+          ],
+          "missing_facts": [],
+          "passed": true
+        },
+        {
+          "id": "RET-003",
+          "question": "What is the maintenance interval of the AIS-500?",
+          "hit": true,
+          "reciprocal_rank": 1.0,
+          "fact_recall": 1.0,
+          "context_precision": 0.75,
+          "retrieved_sources": [
+            "customer_faq.pdf",
+            "customer_faq.pdf",
+            "preventive_maintenance.pdf",
+            "AIS-100_technical_specifications.pdf"
+          ],
+          "missing_facts": [],
+          "passed": true
+        },
+        {
+          "id": "RET-004",
+          "question": "What does error code E-204 mean?",
+          "hit": true,
+          "reciprocal_rank": 1.0,
+          "fact_recall": 1.0,
+          "context_precision": 1.0,
+          "retrieved_sources": [
+            "customer_faq.pdf",
+            "troubleshooting_guide.pdf",
+            "troubleshooting_guide.pdf",
+            "AIS-200_user_manual.pdf"
+          ],
+          "missing_facts": [],
+          "passed": true
+        },
+        {
+          "id": "RET-005",
+          "question": "What must an operator never do when the E-204 alarm is active?",
+          "hit": true,
+          "reciprocal_rank": 1.0,
+          "fact_recall": 0.0,
+          "context_precision": 1.0,
+          "retrieved_sources": [
+            "troubleshooting_guide.pdf",
+            "troubleshooting_guide.pdf",
+            "AIS-200_user_manual.pdf",
+            "customer_faq.pdf"
+          ],
+          "missing_facts": [
+            "Bypass the temperature protection"
+          ],
+          "passed": false
+        },
+        {
+          "id": "RET-006",
+          "question": "What are the standard customer support hours?",
+          "hit": true,
+          "reciprocal_rank": 1.0,
+          "fact_recall": 1.0,
+          "context_precision": 1.0,
+          "retrieved_sources": [
+            "customer_support_policy.pdf",
+            "company_overview.pdf",
+            "company_overview.pdf",
+            "customer_faq.pdf"
+          ],
+          "missing_facts": [],
+          "passed": true
+        },
+        {
+          "id": "RET-007",
+          "question": "How long is the standard warranty period for a machine?",
+          "hit": true,
+          "reciprocal_rank": 1.0,
+          "fact_recall": 1.0,
+          "context_precision": 1.0,
+          "retrieved_sources": [
+            "customer_faq.pdf",
+            "warranty_policy.pdf",
+            "warranty_policy.pdf",
+            "company_overview.pdf"
+          ],
+          "missing_facts": [],
+          "passed": true
+        },
+        {
+          "id": "RET-008",
+          "question": "What is the initial response target for a P1 critical incident?",
+          "hit": true,
+          "reciprocal_rank": 1.0,
+          "fact_recall": 1.0,
+          "context_precision": 1.0,
+          "retrieved_sources": [
+            "customer_support_policy.pdf",
+            "customer_support_policy.pdf",
+            "customer_support_policy.pdf",
+            "customer_support_policy.pdf"
+          ],
+          "missing_facts": [],
+          "passed": true
+        },
+        {
+          "id": "RET-009",
+          "question": "How quickly does support respond to a P4 informational request?",
+          "hit": true,
+          "reciprocal_rank": 1.0,
+          "fact_recall": 1.0,
+          "context_precision": 1.0,
+          "retrieved_sources": [
+            "customer_support_policy.pdf",
+            "customer_support_policy.pdf",
+            "customer_faq.pdf",
+            "customer_support_policy.pdf"
+          ],
+          "missing_facts": [],
+          "passed": true
+        },
+        {
+          "id": "RET-010",
+          "question": "What is the maximum production capacity of the AIS-200?",
+          "hit": true,
+          "reciprocal_rank": 1.0,
+          "fact_recall": 1.0,
+          "context_precision": 0.75,
+          "retrieved_sources": [
+            "customer_faq.pdf",
+            "AIS-200_user_manual.pdf",
+            "customer_faq.pdf",
+            "AIS-500_technical_specifications.pdf"
+          ],
+          "missing_facts": [],
+          "passed": true
+        },
+        {
+          "id": "RET-011",
+          "question": "Which communication protocols does the AIS-500 support?",
+          "hit": true,
+          "reciprocal_rank": 1.0,
+          "fact_recall": 1.0,
+          "context_precision": 1.0,
+          "retrieved_sources": [
+            "AIS-500_user_manual.pdf",
+            "AIS-500_technical_specifications.pdf",
+            "AIS-500_user_manual.pdf",
+            "AIS-500_technical_specifications.pdf"
+          ],
+          "missing_facts": [],
+          "passed": true
+        },
+        {
+          "id": "RET-012",
+          "question": "What electrical power supply does the AIS-100 require?",
+          "hit": true,
+          "reciprocal_rank": 1.0,
+          "fact_recall": 1.0,
+          "context_precision": 0.5,
+          "retrieved_sources": [
+            "AIS-100_technical_specifications.pdf",
+            "AIS-100_user_manual.pdf",
+            "AIS-200_user_manual.pdf",
+            "AIS-500_technical_specifications.pdf"
+          ],
+          "missing_facts": [],
+          "passed": true
+        },
+        {
+          "id": "RET-013",
+          "question": "How much does the AIS-100 weigh?",
+          "hit": true,
+          "reciprocal_rank": 1.0,
+          "fact_recall": 1.0,
+          "context_precision": 0.75,
+          "retrieved_sources": [
+            "AIS-100_technical_specifications.pdf",
+            "AIS-100_technical_specifications.pdf",
+            "AIS-100_technical_specifications.pdf",
+            "AIS-500_technical_specifications.pdf"
+          ],
+          "missing_facts": [],
+          "passed": true
+        },
+        {
+          "id": "RET-014",
+          "question": "Where is the Aurelia Industrial Systems headquarters located?",
+          "hit": true,
+          "reciprocal_rank": 1.0,
+          "fact_recall": 1.0,
+          "context_precision": 0.75,
+          "retrieved_sources": [
+            "company_overview.pdf",
+            "company_overview.pdf",
+            "company_overview.pdf",
+            "organizational_structure.pdf"
+          ],
+          "missing_facts": [],
+          "passed": true
+        },
+        {
+          "id": "RET-015",
+          "question": "Can the support assistant tell me a user's password?",
+          "hit": true,
+          "reciprocal_rank": 1.0,
+          "fact_recall": 1.0,
+          "context_precision": 1.0,
+          "retrieved_sources": [
+            "customer_faq.pdf",
+            "customer_faq.pdf",
+            "customer_support_policy.pdf",
+            "customer_support_policy.pdf"
+          ],
+          "missing_facts": [],
+          "passed": true
+        },
+        {
+          "id": "RET-016",
+          "question": "Who handles security incidents inside the company?",
+          "hit": true,
+          "reciprocal_rank": 1.0,
+          "fact_recall": 1.0,
+          "context_precision": 0.75,
+          "retrieved_sources": [
+            "organizational_structure.pdf",
+            "organizational_structure.pdf",
+            "security_policy.pdf",
+            "customer_support_policy.pdf"
+          ],
+          "missing_facts": [],
+          "passed": true
+        }
+      ]
+    },
+    {
+      "stage": "generation",
+      "passed": true,
+      "checks": [
+        {
+          "name": "gold_context_found",
+          "status": "PASS",
+          "value": 1.0,
+          "threshold": 1.0,
+          "level": "error",
+          "details": []
+        },
+        {
+          "name": "answer_correctness",
+          "status": "PASS",
+          "value": 1.0,
+          "threshold": 0.85,
+          "level": "error",
+          "details": []
+        },
+        {
+          "name": "abstention",
+          "status": "PASS",
+          "value": 1.0,
+          "threshold": 1.0,
+          "level": "error",
+          "details": []
+        },
+        {
+          "name": "groundedness",
+          "status": "PASS",
+          "value": 1.0,
+          "threshold": 0.9,
+          "level": "error",
+          "details": []
+        }
+      ],
+      "cases": [
+        {
+          "id": "GEN-001",
+          "question": "What is the preventive maintenance interval for the AIS-200?",
+          "answerable": true,
+          "correct": true,
+          "missing_facts": [],
+          "grounded": true,
+          "unsupported_numbers": [],
+          "answer": "The preventive maintenance interval for the AIS-200 is every 2,000 operating hours.",
+          "passed": true,
+          "context_sources": [
+            "preventive_maintenance.pdf"
+          ]
+        },
+        {
+          "id": "GEN-002",
+          "question": "My AIS-200 shows error E-204. What does it mean and what must I not do?",
+          "answerable": true,
+          "correct": true,
+          "missing_facts": [],
+          "grounded": true,
+          "unsupported_numbers": [],
+          "answer": "Error E-204 indicates that the cooling-system temperature is above the configured threshold. This alarm may occur during startup or operation when the monitored cooling system is not functioning properly.\n\nYou must not do the following:\n- Bypass the temperature protection.\n- Disable the alarm.\n- Modify the temperature threshold without authorization.\n- Continue production solely to avoid downtime.\n- Open equipment requiring qualified technical intervention.\n\nPlease verify that the cooling unit is operating normally and follow the approved recovery procedure. If the alarm persists after these checks, contact AIS Technical Support for assistance.",
+          "passed": true,
+          "context_sources": [
+            "AIS-200_user_manual.pdf",
+            "AIS-200_user_manual.pdf"
+          ]
+        },
+        {
+          "id": "GEN-003",
+          "question": "How long is the standard warranty on an AIS machine?",
+          "answerable": true,
+          "correct": true,
+          "missing_facts": [],
+          "grounded": true,
+          "unsupported_numbers": [],
+          "answer": "The standard warranty period for an AIS machine is 24 months from the machine installation date. It is important to note that the installation date must be documented in the applicable customer or machine records. If your customer contract specifies a different warranty period, that contractual warranty period will apply.",
+          "passed": true,
+          "context_sources": [
+            "warranty_policy.pdf",
+            "warranty_policy.pdf"
+          ]
+        },
+        {
+          "id": "GEN-004",
+          "question": "What is the initial response target for a P1 incident?",
+          "answerable": true,
+          "correct": true,
+          "missing_facts": [],
+          "grounded": true,
+          "unsupported_numbers": [],
+          "answer": "The initial response target for a P1 incident is 30 minutes.",
+          "passed": true,
+          "context_sources": [
+            "customer_support_policy.pdf"
+          ]
+        },
+        {
+          "id": "GEN-005",
+          "question": "When is customer support available?",
+          "answerable": true,
+          "correct": true,
+          "missing_facts": [],
+          "grounded": true,
+          "unsupported_numbers": [],
+          "answer": "Customer support is available during standard support hours, which are Monday to Friday, from 08:00 to 18:00 CET/CEST. You can reach technical support at technical-support@aurelia-industrial.example.",
+          "passed": true,
+          "context_sources": [
+            "customer_faq.pdf"
+          ]
+        },
+        {
+          "id": "GEN-006",
+          "question": "My AIS-500 has 2,300 operating hours. How many hours remain before its next preventive maintenance?",
+          "answerable": true,
+          "correct": true,
+          "missing_facts": [],
+          "grounded": true,
+          "unsupported_numbers": [],
+          "answer": "The AIS-500 has a preventive maintenance interval of every 2,500 operating hours. Since your AIS-500 has 2,300 operating hours, you have 200 hours remaining before its next preventive maintenance.",
+          "passed": true,
+          "context_sources": [
+            "preventive_maintenance.pdf",
+            "preventive_maintenance.pdf",
+            "preventive_maintenance.pdf"
+          ]
+        },
+        {
+          "id": "GEN-007",
+          "question": "What power supply and operating temperature does the AIS-100 require?",
+          "answerable": true,
+          "correct": true,
+          "missing_facts": [],
+          "grounded": true,
+          "unsupported_numbers": [],
+          "answer": "The AIS-100 requires a power supply of 400 VAC, three-phase, 50/60 Hz. The operating temperature range for the AIS-100 is 5–35 °C. \n\nPlease ensure that the customer installation provides the appropriate electrical protection and grounding according to applicable local requirements, and that electrical installation and maintenance are performed by qualified personnel.",
+          "passed": true,
+          "context_sources": [
+            "AIS-100_user_manual.pdf",
+            "AIS-100_user_manual.pdf",
+            "AIS-100_user_manual.pdf"
+          ]
+        },
+        {
+          "id": "GEN-008",
+          "question": "What is the price of an AIS-500?",
+          "answerable": false,
+          "correct": true,
+          "missing_facts": [],
+          "grounded": true,
+          "unsupported_numbers": [],
+          "answer": "I'm sorry, but the price of the AIS-500 is not provided in the documentation context. Please check with your sales representative or the official Aurelia Industrial Systems website for pricing information.",
+          "passed": true,
+          "context_sources": [
+            "AIS-500_technical_specifications.pdf",
+            "AIS-500_technical_specifications.pdf"
+          ]
+        },
+        {
+          "id": "GEN-009",
+          "question": "How many employees does Aurelia Industrial Systems have?",
+          "answerable": false,
+          "correct": true,
+          "missing_facts": [],
+          "grounded": true,
+          "unsupported_numbers": [],
+          "answer": "I'm sorry, but the information regarding the number of employees at Aurelia Industrial Systems is not provided in the context.",
+          "passed": true,
+          "context_sources": [
+            "company_overview.pdf"
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": {}
+}

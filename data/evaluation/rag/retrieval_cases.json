@@ -1,0 +1,98 @@
+[
+  {
+    "id": "RET-001",
+    "question": "What is the preventive maintenance interval for the AIS-200?",
+    "relevant_sources": ["AIS-200_technical_specifications.pdf", "AIS-200_user_manual.pdf", "customer_faq.pdf", "preventive_maintenance.pdf", "company_overview.pdf"],
+    "facts": ["2,000 operating hours"]
+  },
+  {
+    "id": "RET-002",
+    "question": "How often does the AIS-100 need preventive maintenance?",
+    "relevant_sources": ["AIS-100_technical_specifications.pdf", "AIS-100_user_manual.pdf", "customer_faq.pdf", "preventive_maintenance.pdf", "company_overview.pdf"],
+    "facts": ["1,500 operating hours"]
+  },
+  {
+    "id": "RET-003",
+    "question": "What is the maintenance interval of the AIS-500?",
+    "relevant_sources": ["AIS-500_technical_specifications.pdf", "AIS-500_user_manual.pdf", "customer_faq.pdf", "preventive_maintenance.pdf", "company_overview.pdf"],
+    "facts": ["2,500 operating hours"]
+  },
+  {
+    "id": "RET-004",
+    "question": "What does error code E-204 mean?",
+    "relevant_sources": ["troubleshooting_guide.pdf", "AIS-200_user_manual.pdf", "AIS-200_technical_specifications.pdf", "customer_faq.pdf", "preventive_maintenance.pdf"],
+    "facts": ["cooling-system temperature"]
+  },
+  {
+    "id": "RET-005",
+    "question": "What must an operator never do when the E-204 alarm is active?",
+    "relevant_sources": ["AIS-200_user_manual.pdf", "AIS-200_technical_specifications.pdf", "customer_faq.pdf", "troubleshooting_guide.pdf"],
+    "facts": ["Bypass the temperature protection"]
+  },
+  {
+    "id": "RET-006",
+    "question": "What are the standard customer support hours?",
+    "relevant_sources": ["customer_faq.pdf", "company_overview.pdf", "customer_support_policy.pdf"],
+    "facts": ["08:00–18:00 CET/CEST"]
+  },
+  {
+    "id": "RET-007",
+    "question": "How long is the standard warranty period for a machine?",
+    "relevant_sources": ["warranty_policy.pdf", "customer_faq.pdf", "company_overview.pdf"],
+    "facts": ["24 months"]
+  },
+  {
+    "id": "RET-008",
+    "question": "What is the initial response target for a P1 critical incident?",
+    "relevant_sources": ["customer_support_policy.pdf", "customer_faq.pdf"],
+    "facts": ["30 minutes"]
+  },
+  {
+    "id": "RET-009",
+    "question": "How quickly does support respond to a P4 informational request?",
+    "relevant_sources": ["customer_support_policy.pdf", "customer_faq.pdf"],
+    "facts": ["2 business days"]
+  },
+  {
+    "id": "RET-010",
+    "question": "What is the maximum production capacity of the AIS-200?",
+    "relevant_sources": ["AIS-200_technical_specifications.pdf", "AIS-200_user_manual.pdf", "customer_faq.pdf", "company_overview.pdf", "troubleshooting_guide.pdf"],
+    "facts": ["80 units per minute"]
+  },
+  {
+    "id": "RET-011",
+    "question": "Which communication protocols does the AIS-500 support?",
+    "relevant_sources": ["AIS-500_technical_specifications.pdf", "AIS-500_user_manual.pdf"],
+    "facts": ["OPC UA", "Industrial Ethernet"]
+  },
+  {
+    "id": "RET-012",
+    "question": "What electrical power supply does the AIS-100 require?",
+    "relevant_sources": ["AIS-100_user_manual.pdf", "AIS-100_technical_specifications.pdf"],
+    "facts": ["400 VAC"]
+  },
+  {
+    "id": "RET-013",
+    "question": "How much does the AIS-100 weigh?",
+    "relevant_sources": ["AIS-100_technical_specifications.pdf"],
+    "facts": ["1,850 kg"]
+  },
+  {
+    "id": "RET-014",
+    "question": "Where is the Aurelia Industrial Systems headquarters located?",
+    "relevant_sources": ["company_overview.pdf"],
+    "facts": ["Via delle Industrie 42"]
+  },
+  {
+    "id": "RET-015",
+    "question": "Can the support assistant tell me a user's password?",
+    "relevant_sources": ["customer_faq.pdf", "security_policy.pdf", "data_privacy_policy.pdf", "customer_support_policy.pdf"],
+    "facts": ["must never be returned"]
+  },
+  {
+    "id": "RET-016",
+    "question": "Who handles security incidents inside the company?",
+    "relevant_sources": ["organizational_structure.pdf", "security_policy.pdf", "data_privacy_policy.pdf"],
+    "facts": ["IT & Security"]
+  }
+]

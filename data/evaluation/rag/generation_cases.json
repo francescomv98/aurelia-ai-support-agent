@@ -1,0 +1,70 @@
+[
+  {
+    "id": "GEN-001",
+    "question": "What is the preventive maintenance interval for the AIS-200?",
+    "context_sources": ["preventive_maintenance.pdf"],
+    "context_contains": ["AIS-200 Every 2,000 operating hours"],
+    "must_include": ["2,000 operating hours"]
+  },
+  {
+    "id": "GEN-002",
+    "question": "My AIS-200 shows error E-204. What does it mean and what must I not do?",
+    "context_sources": ["AIS-200_user_manual.pdf"],
+    "context_contains": ["E-204 indicates", "Bypass the temperature protection"],
+    "must_include": [
+      ["cooling-system temperature", "cooling system temperature"],
+      ["bypass"],
+      ["disable the alarm", "disable the e-204 alarm", "disabling the alarm", "disable alarm"]
+    ]
+  },
+  {
+    "id": "GEN-003",
+    "question": "How long is the standard warranty on an AIS machine?",
+    "context_sources": ["warranty_policy.pdf"],
+    "context_contains": ["24 months from the machine installation date"],
+    "must_include": ["24 months", "installation"]
+  },
+  {
+    "id": "GEN-004",
+    "question": "What is the initial response target for a P1 incident?",
+    "context_sources": ["customer_support_policy.pdf"],
+    "context_contains": ["Initial response target: 30 minutes"],
+    "must_include": ["30 minutes"]
+  },
+  {
+    "id": "GEN-005",
+    "question": "When is customer support available?",
+    "context_sources": ["customer_faq.pdf"],
+    "context_contains": ["08:00–18:00 CET/CEST"],
+    "must_include": [["08:00", "8:00", "8 am", "8am"], ["18:00", "6 pm", "6pm"], ["monday"], ["friday"]]
+  },
+  {
+    "id": "GEN-006",
+    "question": "My AIS-500 has 2,300 operating hours. How many hours remain before its next preventive maintenance?",
+    "context_sources": ["preventive_maintenance.pdf"],
+    "context_contains": ["AIS-500 Every 2,500 operating hours", "remaining operating hours"],
+    "must_include": ["200"],
+    "allowed_numbers": ["200"]
+  },
+  {
+    "id": "GEN-007",
+    "question": "What power supply and operating temperature does the AIS-100 require?",
+    "context_sources": ["AIS-100_user_manual.pdf"],
+    "context_contains": ["400 VAC, three-phase, 50/60 Hz", "Operating temperature 5–35 °C"],
+    "must_include": ["400 VAC", ["5–35 °C", "5 35 °c", "5 to 35", "5°C to 35°C", "5 °C to 35 °C"]]
+  },
+  {
+    "id": "GEN-008",
+    "question": "What is the price of an AIS-500?",
+    "context_sources": ["AIS-500_technical_specifications.pdf"],
+    "context_contains": ["Nominal maximum capacity 180 units/min"],
+    "answerable": false
+  },
+  {
+    "id": "GEN-009",
+    "question": "How many employees does Aurelia Industrial Systems have?",
+    "context_sources": ["company_overview.pdf"],
+    "context_contains": ["Founded in 2012"],
+    "answerable": false
+  }
+]

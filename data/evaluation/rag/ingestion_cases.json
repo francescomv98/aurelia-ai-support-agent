@@ -1,0 +1,17 @@
+[
+  { "id": "ING-001", "source": "AIS-100_technical_specifications.pdf", "fact": "1,850 kg" },
+  { "id": "ING-002", "source": "AIS-100_user_manual.pdf", "fact": "400 VAC, three-phase, 50/60 Hz" },
+  { "id": "ING-003", "source": "AIS-200_user_manual.pdf", "fact": "Bypass the temperature protection" },
+  { "id": "ING-004", "source": "AIS-200_technical_specifications.pdf", "fact": "2,000 operating hours" },
+  { "id": "ING-005", "source": "AIS-500_technical_specifications.pdf", "fact": "OPC UA" },
+  { "id": "ING-006", "source": "AIS-500_user_manual.pdf", "fact": "2,500 operating hours" },
+  { "id": "ING-007", "source": "company_overview.pdf", "fact": "Via delle Industrie 42" },
+  { "id": "ING-008", "source": "customer_faq.pdf", "fact": "08:00–18:00 CET/CEST" },
+  { "id": "ING-009", "source": "customer_support_policy.pdf", "fact": "Initial response target: 30 minutes" },
+  { "id": "ING-010", "source": "preventive_maintenance.pdf", "fact": "2,000 − 1,734 = 266 operating hours" },
+  { "id": "ING-011", "source": "troubleshooting_guide.pdf", "fact": "Cooling-system temperature above configured threshold" },
+  { "id": "ING-012", "source": "warranty_policy.pdf", "fact": "24 months from the machine installation date" },
+  { "id": "ING-013", "source": "organizational_structure.pdf", "fact": "Security incidents must be escalated to IT & Security" },
+  { "id": "ING-014", "source": "security_policy.pdf", "fact": "Role-Based Access Control (RBAC)" },
+  { "id": "ING-015", "source": "data_privacy_policy.pdf", "fact": "Potential incidents must be reported even when the full scope of the incident is not yet known" }
+]

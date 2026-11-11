@@ -91,6 +91,8 @@ Located in `src/rag/`.
 
 The RAG component supports retrieving relevant information from technical documentation. Document embeddings are stored in PostgreSQL with pgvector, enabling semantic similarity search.
 
+Documents are split into chunks of up to 500 characters with a 100-character overlap. The pages of each PDF are chunked as one continuous text, so a table that crosses a page break stays together, and each chunk keeps the number of the page it starts on. Each chunk also starts with its document's title, for example `[AIS-100 Technical Specifications]`, so that chunks such as specification tables are linked to the product they describe. These settings were chosen with the RAG evaluation below. After changing them, re-run `python -m scripts.ingest_documents`.
+
 ### LLM Integration
 
 Located in `src/llm/`.
@@ -174,6 +176,31 @@ python -m scripts.run_evaluation
 ```
 
 The live evaluation requires the database, the vector store, the configured language model and the services needed by the agent to be available.
+
+### RAG Evaluation
+
+Located in `src/evaluation/rag/`, `tests/evaluation/rag/`, `data/evaluation/rag/` and `scripts/evaluate_rag.py`.
+
+The RAG pipeline is evaluated one stage at a time, so a failure points to the stage that caused it:
+
+| Stage | Question it answers | Metrics | Needs |
+|---|---|---|---|
+| Ingestion | Did the PDFs become complete, well-formed chunks? | PDFs loaded, pages with text, chunk metadata, chunk size, duplicates, fact coverage, optional vector-store count | Nothing (offline) |
+| Retrieval | Does the vector search return the right chunks? | Hit rate, MRR, fact recall, context precision | Database with ingested documents, OpenAI key |
+| Generation | Given the right context, is the answer correct and grounded? | Answer correctness, abstention on unanswerable questions, groundedness (no invented numbers) | OpenAI key |
+
+Generation uses a fixed "gold" context taken from the ingested chunks instead of the retriever, and runs the same `generate_response` node the agent uses. A generation failure is therefore a prompt or model problem, not a retrieval problem.
+
+Run all stages, or one stage, from the repository root:
+
+```bash
+python -m scripts.evaluate_rag
+python -m scripts.evaluate_rag --stage ingestion --check-store
+python -m scripts.evaluate_rag --stage retrieval --top-k 4
+python -m scripts.evaluate_rag --check-store --output data/evaluation/rag/rag_report.json
+```
+
+Each stage prints its checks with thresholds, and the script exits with a non-zero code when a check fails. Warnings, such as a PDF page with no extractable text, are reported without failing the stage. The metric logic, the datasets and the ingestion of the real PDFs are also covered by `pytest tests/evaluation/rag`, which runs offline in CI.
 
 ## Tech Stack
 
