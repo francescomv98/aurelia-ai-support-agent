@@ -1,0 +1,205 @@
+# Azure Pipelines equivalent of .github/workflows/ci.yml (CI only).
+#
+# Images are published by the GitHub CD workflow (.github/workflows/cd.yml) to
+# GitHub Container Registry, so this pipeline does not push any image.
+#
+# Pull request runs: Azure Repos ignores the `pr:` keyword. Add this pipeline under
+# Repos > Branches > main / develop > Branch policies > Build validation.
+
+trigger:
+  branches:
+    include:
+      - main
+      - develop
+      - release/*
+      - hotfix/*
+
+variables:
+  pythonVersion: "3.13"
+  PIP_CACHE_DIR: $(Pipeline.Workspace)/.pip
+
+pool:
+  vmImage: ubuntu-latest
+
+resources:
+  containers:
+    - container: postgres
+      image: pgvector/pgvector:pg16
+      ports:
+        - 5432:5432
+      env:
+        POSTGRES_DB: aurelia
+        POSTGRES_USER: aurelia
+        POSTGRES_PASSWORD: aurelia_dev_password
+
+stages:
+  - stage: CI
+    displayName: CI
+    jobs:
+      - job: Lint
+        displayName: Lint
+        timeoutInMinutes: "10"
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: $(pythonVersion)
+
+          - script: |
+              pip install "$(grep '^ruff==' requirements-dev.txt)"
+              ruff check .
+            displayName: Run ruff
+
+      - job: DependencyAudit
+        displayName: Dependency audit
+        timeoutInMinutes: "15"
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: $(pythonVersion)
+
+          # Fails when a pinned runtime dependency has a known vulnerability.
+          - script: |
+              pip install "$(grep '^pip-audit==' requirements-dev.txt)"
+              pip-audit -r requirements.txt --progress-spinner off
+            displayName: Audit runtime dependencies
+
+      - job: Tests
+        displayName: Run tests
+        timeoutInMinutes: "30"
+        services:
+          postgres: postgres
+        variables:
+          DATABASE_URL: postgresql+psycopg://aurelia:aurelia_dev_password@localhost:5432/aurelia
+          AURELIA_DEMO_PASSWORD: AureliaDemo123!
+          # Test-only signing key for the CI run (at least 32 bytes for HS256).
+          # It signs nothing outside this job; never reuse it in a real deployment.
+          JWT_SECRET_KEY: ci-only-jwt-secret-key-not-for-production-use
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: $(pythonVersion)
+
+          - task: Cache@2
+            displayName: Cache pip downloads
+            inputs:
+              key: 'pip | "$(Agent.OS)" | requirements.txt | requirements-dev.txt'
+              path: $(PIP_CACHE_DIR)
+
+          - script: |
+              python -m pip install --upgrade pip
+              pip install -r requirements-dev.txt
+            displayName: Install dependencies
+
+          - script: |
+              python - <<'PY'
+              import os
+              import time
+              import psycopg
+
+              url = os.environ["DATABASE_URL"].replace("postgresql+psycopg://", "postgresql://")
+
+              for attempt in range(30):
+                  try:
+                      psycopg.connect(url, connect_timeout=2).close()
+                      print("PostgreSQL is ready")
+                      break
+                  except psycopg.OperationalError:
+                      time.sleep(2)
+              else:
+                  raise SystemExit("PostgreSQL did not become ready")
+              PY
+            displayName: Wait for PostgreSQL
+
+          - script: python -m scripts.init_database
+            displayName: Initialize database
+
+          - script: python -m scripts.seed_database
+            displayName: Seed database
+
+          # The MCP server and the test suites share one step so the background
+          # server is guaranteed to stay alive while the tests run.
+          # Integration tests write to the seeded database and call the MCP server,
+          # so they run after the unit and evaluation tests.
+          - script: |
+              set -e
+
+              nohup python -m src.mcp.server > mcp-server.log 2>&1 &
+
+              python - <<'PY'
+              import time
+              import urllib.error
+              import urllib.request
+
+              request = urllib.request.Request("http://localhost:8001/mcp", headers={"Accept": "application/json, text/event-stream"})
+
+              for attempt in range(30):
+                  try:
+                      with urllib.request.urlopen(request, timeout=2):
+                          break
+                  except urllib.error.HTTPError as exc:
+                      # 400/405: the endpoint answers but the request is not a valid MCP operation.
+                      if exc.code in (400, 405):
+                          break
+                      time.sleep(1)
+                  except Exception:
+                      time.sleep(1)
+              else:
+                  raise SystemExit("MCP server did not become reachable")
+
+              print("MCP server is reachable")
+              PY
+
+              pytest tests/unit -v --cov=src --cov-report= --junitxml=test-unit.xml
+              pytest tests/evaluation -v --cov=src --cov-append --cov-report= --junitxml=test-evaluation.xml
+              pytest tests/integration -v --cov=src --cov-append --cov-report= --junitxml=test-integration.xml
+
+              coverage xml
+              coverage report --fail-under=80
+            displayName: Start MCP server and run tests
+
+          - script: cat mcp-server.log || true
+            displayName: Show MCP server log
+            condition: failed()
+
+          - task: PublishTestResults@2
+            displayName: Publish test results
+            condition: succeededOrFailed()
+            inputs:
+              testResultsFormat: JUnit
+              testResultsFiles: test-*.xml
+              testRunTitle: Aurelia tests
+
+          - task: PublishCodeCoverageResults@2
+            displayName: Publish coverage
+            condition: succeededOrFailed()
+            inputs:
+              summaryFileLocation: coverage.xml
+
+      - job: DockerSmokeTest
+        displayName: Build and smoke-test Docker image
+        timeoutInMinutes: "20"
+        steps:
+          # Proves the image starts and serves HTTP. /health needs no database or OpenAI,
+          # so placeholder values are enough for the settings read at import time.
+          - script: |
+              docker build -t aurelia-ai-support-agent:ci .
+
+              docker run -d --name aurelia-api -p 8000:8000 \
+                -e DATABASE_URL=postgresql+psycopg://placeholder:placeholder@localhost:5432/placeholder \
+                -e JWT_SECRET_KEY=ci-only-jwt-secret-key-not-for-production-use \
+                -e OPENAI_API_KEY=placeholder \
+                aurelia-ai-support-agent:ci
+
+              for attempt in $(seq 1 30); do
+                if curl --silent --fail http://localhost:8000/health; then
+                  echo
+                  echo "Image is healthy"
+                  exit 0
+                fi
+                sleep 1
+              done
+
+              echo "Image did not become healthy"
+              docker logs aurelia-api
+              exit 1
+            displayName: Build and smoke-test image
