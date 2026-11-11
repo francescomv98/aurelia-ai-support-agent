@@ -495,6 +495,10 @@ docker pull ghcr.io/<owner>/<repository>:latest
 
 The same image runs the API and the MCP server. Deploying it to a server is not automated yet.
 
+### Azure DevOps (`azure-pipelines.yml`)
+
+The same CI as an Azure Pipeline: lint, dependency audit, tests and the Docker smoke test. It runs on pushes to `main`, `develop`, `release/*` and `hotfix/*`. Images are not published from Azure DevOps; the GitHub CD workflow publishes them to GitHub Container Registry. To run CI on pull requests, add the pipeline as a **Build validation** branch policy on `main` and `develop`.
+
 ## Project Goals
 
 This project explores the development of a modular AI support application that combines:
