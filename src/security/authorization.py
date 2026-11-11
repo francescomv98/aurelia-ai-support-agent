@@ -13,12 +13,13 @@ def require_role(user: AuthenticatedUser, allowed_roles: Collection[UserRole]) -
 
 
 def require_customer_access(user: AuthenticatedUser, customer_id: int) -> None:
-    """Ensure the user is authorized to access a customer resource."""
+    """Ensure the user is the customer that owns the resource.
 
-    if user.role in { UserRole.SUPPORT_AGENT, UserRole.ADMIN }:
-        return
+    The support agent serves customers only: staff roles do not act on behalf
+    of customers, so only a CUSTOMER user with the same customer_id is allowed.
+    """
 
-    if user.role == UserRole.CUSTOMER and user.customer_id == customer_id:
+    if user.role == UserRole.CUSTOMER and user.customer_id is not None and user.customer_id == customer_id:
         return
 
     logger.warning("Authorization denied: customer access violation", user_id=user.user_id, role=user.role.value)

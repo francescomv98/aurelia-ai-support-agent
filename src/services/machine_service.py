@@ -14,6 +14,7 @@ class MachineResult(BaseModel):
     machine_serial: str | None = None
     model: str | None = None
     operating_hours: int | None = None
+    maintenance_interval_hours: int | None = None
     message: str
     
     
@@ -39,6 +40,7 @@ def get_machine(db: Session, machine_serial: str, customer_id: int) -> MachineRe
             machine_serial=machine.serial_number,
             model=machine.product.name,
             operating_hours=machine.operating_hours,
+            maintenance_interval_hours=machine.product.maintenance_interval_hours,
             message=(
                 f"Machine {machine.serial_number} is an "
                 f"{machine.product.name} with "

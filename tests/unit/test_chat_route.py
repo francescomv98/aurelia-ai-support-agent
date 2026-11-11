@@ -1,3 +1,4 @@
+import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi.testclient import TestClient
 from main import app
@@ -398,5 +399,23 @@ def test_chat_resume_with_rejection_returns_agent_response(mock_create_chat_mode
         assert call_args.args[0].resume == "REJECTED"
         assert call_args.kwargs["config"]["configurable"]["thread_id"] == "test-thread-rejected"
 
+    finally:
+        app.dependency_overrides.clear()
+
+@pytest.mark.parametrize("role", [UserRole.SUPPORT_AGENT, UserRole.ADMIN])
+@pytest.mark.parametrize("path, payload", [
+    ("/chat", {"message": "What is the status of order ORD-10245?"}),
+    ("/chat/resume", {"thread_id": "thread-1", "decision": "APPROVED"}),
+])
+@patch("src.api.routes.chat.build_agent_graph")
+def test_chat_endpoints_reject_staff_users(mock_build_agent_graph: MagicMock, path: str, payload: dict, role: UserRole) -> None:
+    # The agent serves customers only; staff do not act on their behalf.
+    app.dependency_overrides[get_current_user] = lambda: AuthenticatedUser(user_id=10, customer_id=None, role=role)
+
+    try:
+        response = client.post(path, json=payload)
+
+        assert response.status_code == 403
+        mock_build_agent_graph.assert_not_called()
     finally:
         app.dependency_overrides.clear()

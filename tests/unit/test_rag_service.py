@@ -66,36 +66,3 @@ def test_build_context_with_no_documents() -> None:
     context = service.build_context([])
 
     assert context == ""
-
-def test_extract_maintenance_interval() -> None:
-    rag_service = RAGService(retriever=None)
-
-    documents = [
-        Document(
-            page_content=(
-                "AIS-100: preventive maintenance every 1,500 operating hours.\n"
-                "AIS-200: preventive maintenance every 2,000 operating hours.\n"
-                "AIS-500: preventive maintenance every 2,500 operating hours."
-            ),
-            metadata={}
-        )
-    ]
-
-    result = rag_service.extract_maintenance_interval(documents=documents, model="AIS-200")
-
-    assert result == 2000
-
-
-def test_extract_maintenance_interval_not_found() -> None:
-    rag_service = RAGService(retriever=None)
-
-    documents = [
-        Document(
-            page_content="AIS-100: preventive maintenance every 1,500 operating hours.",
-            metadata={}
-        )
-    ]
-
-    result = rag_service.extract_maintenance_interval(documents=documents, model="AIS-200")
-
-    assert result is None

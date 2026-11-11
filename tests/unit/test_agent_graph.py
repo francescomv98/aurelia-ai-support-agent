@@ -162,6 +162,7 @@ async def test_execute_tool_calculates_machine_maintenance(monkeypatch) -> None:
             machine_serial="AIS2-2025-00142",
             model="AIS-200",
             operating_hours=1734,
+            maintenance_interval_hours=2000,
             message=(
                 "Machine AIS2-2025-00142 is an AIS-200 "
                 "with 1734 operating hours."
@@ -169,13 +170,6 @@ async def test_execute_tool_calculates_machine_maintenance(monkeypatch) -> None:
         )
 
     monkeypatch.setattr("src.agent.graph.get_machine_tool", fake_get_machine_tool)
-
-    class FakeRAGService:
-        def extract_maintenance_interval(self, documents, model: str) -> int | None:
-            assert model == "AIS-200"
-            assert len(documents) == 1
-
-            return 2000
 
     state = {
         "user_query": (
@@ -199,10 +193,40 @@ async def test_execute_tool_calculates_machine_maintenance(monkeypatch) -> None:
         "response": ""
     }
 
-    result = await execute_tool(state=state, db=object(), rag_service=FakeRAGService())
+    # The interval comes from the product data; the documentation is not parsed.
+    result = await execute_tool(state=state, db=object(), rag_service=object())
 
     assert "1734 operating hours" in result["tool_result"]
     assert "266 hours remain" in result["tool_result"]
+
+
+@pytest.mark.anyio
+async def test_execute_tool_reports_missing_maintenance_interval(monkeypatch) -> None:
+    machine_result = MachineResult(
+        status="FOUND",
+        machine_serial="AIS2-2025-00142",
+        model="AIS-200",
+        operating_hours=1734,
+        maintenance_interval_hours=None,
+        message="Machine AIS2-2025-00142 is an AIS-200 with 1734 operating hours."
+    )
+
+    monkeypatch.setattr("src.agent.graph.get_machine_tool", lambda db, machine_serial, user: machine_result)
+
+    state = {
+        "user_query": "When does machine AIS2-2025-00142 need maintenance?",
+        "authenticated_user": create_customer_user(),
+        "route": "hybrid",
+        "rag_available": True,
+        "tool_type": "machine",
+        "retrieved_context": [],
+        "tool_result": "",
+        "response": ""
+    }
+
+    result = await execute_tool(state=state, db=object(), rag_service=object())
+
+    assert "could not be determined from the product data" in result["tool_result"]
 
 
 @pytest.mark.anyio
@@ -532,7 +556,6 @@ async def test_hybrid_request_executes_tool_when_rag_is_unavailable():
     chat_model = MagicMock(spec=ChatOpenAI)
     rag_service = MagicMock(spec=RAGService)
     rag_service.retrieve_context.side_effect = DatabaseError("Vector store operation failed.")
-    rag_service.extract_maintenance_interval.return_value = None
 
     checkpointer = InMemorySaver()
     db = MagicMock()
@@ -548,7 +571,8 @@ async def test_hybrid_request_executes_tool_when_rag_is_unavailable():
         message=("Machine AIS2-2025-00142 is an AIS-200 machine with 1734 operating hours."),
         machine_serial="AIS2-2025-00142",
         model="AIS-200",
-        operating_hours=1734
+        operating_hours=1734,
+        maintenance_interval_hours=2000
     )
 
     with patch("src.agent.graph.get_machine_tool", return_value=machine_result) as mock_machine_tool:
@@ -575,7 +599,9 @@ async def test_hybrid_request_executes_tool_when_rag_is_unavailable():
     mock_machine_tool.assert_called_once_with(db=db, machine_serial="AIS2-2025-00142", user=initial_state["authenticated_user"])
 
     assert "Machine AIS2-2025-00142" in result["tool_result"]
-    assert "maintenance interval could not be determined" in result["tool_result"]
+    # The interval is read from the product data, so the calculation still
+    # works when the documentation service is down.
+    assert "266 hours remain" in result["tool_result"]
 
     chat_model.invoke.assert_called_once()
 

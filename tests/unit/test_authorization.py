@@ -24,16 +24,20 @@ def test_customer_cannot_access_another_customer() -> None:
         require_customer_access(user, customer_id=2)
 
 
-def test_support_agent_can_access_any_customer() -> None:
-    user = create_user(customer_id=None, role=UserRole.SUPPORT_AGENT)
+@pytest.mark.parametrize("role", [UserRole.SUPPORT_AGENT, UserRole.ADMIN])
+def test_staff_cannot_access_customer_data(role: UserRole) -> None:
+    # The agent serves customers only; staff do not act on their behalf.
+    user = create_user(customer_id=None, role=role)
 
-    require_customer_access(user, customer_id=2)
+    with pytest.raises(AuthorizationError, match="not authorized"):
+        require_customer_access(user, customer_id=2)
 
 
-def test_admin_can_access_any_customer() -> None:
-    user = create_user(customer_id=None, role=UserRole.ADMIN)
+def test_customer_without_customer_context_is_rejected() -> None:
+    user = create_user(customer_id=None, role=UserRole.CUSTOMER)
 
-    require_customer_access(user, customer_id=999)
+    with pytest.raises(AuthorizationError, match="not authorized"):
+        require_customer_access(user, customer_id=1)
 
 
 def test_allowed_role_is_accepted() -> None:
@@ -99,3 +103,20 @@ def test_authorize_without_pending_action():
 
     with pytest.raises(ValueError, match="No pending action"):
         authorize_action(state)
+
+
+def test_authorize_action_rejects_foreign_customer_id():
+    state = create_state("The requested action was approved.")
+    state["authenticated_user"] = create_user(customer_id=1)
+    state["pending_action"].parameters["customer_id"] = 2
+
+    with pytest.raises(AuthorizationError, match="not authorized"):
+        authorize_action(state)
+
+
+def test_authorize_action_accepts_own_customer_id():
+    state = create_state("The requested action was approved.")
+    state["authenticated_user"] = create_user(customer_id=1)
+    state["pending_action"].parameters["customer_id"] = 1
+
+    assert authorize_action(state) is state

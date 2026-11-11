@@ -81,6 +81,10 @@ Located in `src/agent/`.
 
 The agent uses LangGraph to orchestrate the request-processing workflow and coordinate the available capabilities.
 
+Write actions (creating or cancelling an order, creating or updating a support ticket) pause the workflow and return `status: "approval_required"`. The customer who made the request confirms or rejects the action through `POST /chat/resume`. This is a user confirmation step, not an approval by a second person.
+
+For maintenance-status questions, the maintenance interval is read from the `products` table (`maintenance_interval_hours`). The retrieved documentation is used only as context for the answer.
+
 ### RAG Pipeline
 
 Located in `src/rag/`.
@@ -103,7 +107,7 @@ The database layer provides the application's PostgreSQL connectivity and sessio
 
 Located in `src/services/` and `src/tools/`.
 
-The services encapsulate business operations used by the application and MCP tools, including:
+The services encapsulate business operations used by the application and MCP tools. `src/tools/` holds the two authorization wrappers the agent calls directly for the hybrid machine flow (machine data and machine tickets). The operations include:
 
 - Customer information retrieval
 - Order status retrieval, creation and cancellation
@@ -141,6 +145,8 @@ The MCP client is configured to connect to `http://localhost:8001/mcp` during lo
 Located in `src/auth/` and `src/security/`.
 
 The application includes JWT-based authentication, authorization controls, request rate limiting and input validation. These mechanisms help protect API endpoints and restrict access to supported operations.
+
+The chat endpoints serve customers only. `SUPPORT_AGENT` and `ADMIN` users receive `403 Forbidden` from `/chat` and `/chat/resume`, and every agent operation runs for the authenticated customer's own `customer_id`.
 
 ### Logging and Observability
 

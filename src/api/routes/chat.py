@@ -9,6 +9,8 @@ from src.auth.models import AuthenticatedUser
 from src.database.session import SessionLocal
 from src.llm.openai_client import create_chat_model
 from src.app_logging.logger import logger
+from src.database.models import UserRole
+from src.security.authorization import require_role
 from src.rag.embedding import create_embeddings
 from src.rag.rag_service import RAGService
 from src.rag.retriever import Retriever
@@ -102,6 +104,9 @@ async def chat(request: ChatRequest, current_user: AuthenticatedUser = Depends(g
 
     logger.info("Chat request received", user_id=current_user.user_id, role=current_user.role.value, message_length=len(request.message))
 
+    # The support agent serves customers only; staff do not act on their behalf.
+    require_role(current_user, {UserRole.CUSTOMER})
+
     if not request.message.strip():
         return ChatResponse(response="Please provide a message.", thread_id=request.thread_id or str(uuid.uuid4()))
     
@@ -179,9 +184,11 @@ async def chat(request: ChatRequest, current_user: AuthenticatedUser = Depends(g
 
 @router.post("/resume", response_model=ChatResponse)
 async def resume_chat(request: ChatResumeRequest, current_user: AuthenticatedUser = Depends(get_current_user)) -> ChatResponse:
-    """Resume a paused support agent workflow after human approval."""
+    """Resume a paused workflow with the customer's confirmation decision."""
 
     logger.info("Chat resume request received", user_id=current_user.user_id, thread_id=request.thread_id, decision=request.decision)
+
+    require_role(current_user, {UserRole.CUSTOMER})
 
     db = SessionLocal()
 

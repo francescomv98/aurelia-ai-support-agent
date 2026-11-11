@@ -239,16 +239,18 @@ async def execute_tool(state: AgentState, db: Session, rag_service: RAGService) 
                 "tool_result": "Machine information is incomplete and maintenance status cannot be calculated."
             }
 
-        maintenance_interval = rag_service.extract_maintenance_interval(documents=state["retrieved_context"], model=machine_result.model)
+        # The interval comes from the products table, not from the retrieved
+        # documentation: the retrieved PDFs still feed the answer as context.
+        maintenance_interval = machine_result.maintenance_interval_hours
 
         if maintenance_interval is None:
-            logger.warning("Maintenance interval unavailable from RAG", machine_serial=machine_result.machine_serial, model=machine_result.model)
+            logger.warning("Maintenance interval missing from product data", machine_serial=machine_result.machine_serial, model=machine_result.model)
 
             return {
                 **state,
                 "tool_result": (
                     f"{machine_result.message} "
-                    "The current maintenance interval could not be determined from the available documentation."
+                    "The current maintenance interval could not be determined from the product data."
                 )
             }
 

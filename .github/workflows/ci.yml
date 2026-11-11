@@ -111,6 +111,14 @@ jobs:
       - name: Run unit tests
         run: pytest tests/unit -v
 
+      - name: Run evaluation tests
+        run: pytest tests/evaluation -v
+
+      # Integration tests write to the seeded database and call the MCP server,
+      # so they run after the unit tests against the same services.
+      - name: Run integration tests
+        run: pytest tests/integration -v
+
   build-docker:
     name: Build Docker image
     runs-on: ubuntu-latest
