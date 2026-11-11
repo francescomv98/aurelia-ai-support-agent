@@ -34,6 +34,9 @@ jobs:
     env:
       DATABASE_URL: postgresql+psycopg://aurelia:aurelia_dev_password@localhost:5432/aurelia
       AURELIA_DEMO_PASSWORD: AureliaDemo123!
+      # Test-only signing key for the CI run (at least 32 bytes for HS256).
+      # It signs nothing outside this job; never reuse it in a real deployment.
+      JWT_SECRET_KEY: ci-only-jwt-secret-key-not-for-production-use
 
     steps:
       - name: Checkout repository
