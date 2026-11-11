@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from src.agent.router import route_request
 from src.agent.state import AgentState
-from src.logging.logger import logger
+from src.app_logging.logger import logger
 from src.rag.rag_service import RAGService
 from src.tools.machine_tools import get_machine_tool
 from src.tools.ticket_tools import get_machine_ticket_tool
@@ -21,6 +21,12 @@ from src.agent.human_approval import request_human_approval
 from src.agent.authorization import authorize_action
 from src.security.authorization import require_customer_access
 from src.mcp.client import create_mcp_client, call_mcp_tool
+
+MAINTENANCE_KEYWORDS = ("maintenance", "service history", "service record")
+
+# Whole-word match so that phrases like "in case" or "showcase" are not treated as ticket requests.
+TICKET_KEYWORD_PATTERN = re.compile(r"\b(?:tickets?|support cases?)\b")
+
 
 def retrieve_context(state: AgentState, rag_service: RAGService) -> AgentState:
     """Retrieve relevant documentation for the user query."""
@@ -47,8 +53,8 @@ def determine_tool_type(state: AgentState) -> AgentState:
     """Determine which enterprise tool is required."""
     query = state["user_query"].upper()
 
-    product_match = re.search(r"\b(?:AIS-\d{3}|SP-[A-Z0-9-]+)\b", query.upper())
-    customer_match = re.search(r"\bCUST-\d+\b", query.upper())
+    product_match = re.search(r"\b(?:AIS-\d{3}|SP-[A-Z0-9-]+)\b", query)
+    customer_match = re.search(r"\bCUST-\d+\b", query)
 
     if "ORD-" in query:
         tool_type = "order"
@@ -148,10 +154,7 @@ async def execute_tool(state: AgentState, db: Session, rag_service: RAGService) 
 
             query_lower = query.lower()
 
-            maintenance_keywords = ("maintenance", "maintenance history", "maintenance record", "maintenance records", "service history",
-                "service record", "service records")
-
-            is_maintenance_request = any(keyword in query_lower for keyword in maintenance_keywords)
+            is_maintenance_request = any(keyword in query_lower for keyword in MAINTENANCE_KEYWORDS)
 
             if is_maintenance_request:
                 async with create_mcp_client() as client:
@@ -167,9 +170,7 @@ async def execute_tool(state: AgentState, db: Session, rag_service: RAGService) 
                     "tool_result": result
                 }
 
-            ticket_keywords = ("ticket", "support ticket", "support case", "case")
-
-            is_ticket_request = any(keyword in query_lower for keyword in ticket_keywords)
+            is_ticket_request = TICKET_KEYWORD_PATTERN.search(query_lower) is not None
 
             if is_ticket_request:
                 async with create_mcp_client() as client:
@@ -206,12 +207,6 @@ async def execute_tool(state: AgentState, db: Session, rag_service: RAGService) 
                 "tool_result": machine_result.message
             }
 
-        if state["route"] != "hybrid":
-            return {
-                **state,
-                "tool_result": machine_result.message
-            }
-
         # ------------------------------------------------------------------
         # Hybrid request: determine whether the user is asking about
         # maintenance or an existing support ticket.
@@ -219,9 +214,7 @@ async def execute_tool(state: AgentState, db: Session, rag_service: RAGService) 
 
         query_lower = query.lower()
 
-        ticket_keywords = ("ticket", "support ticket", "support case", "case")
-
-        is_ticket_request = any(keyword in query_lower for keyword in ticket_keywords)
+        is_ticket_request = TICKET_KEYWORD_PATTERN.search(query_lower) is not None
 
         if is_ticket_request:
             ticket_result = get_machine_ticket_tool(db=db, machine_serial=machine_serial, user=user)
@@ -525,6 +518,9 @@ Context:
     except openai.APITimeoutError as exc:
         logger.exception("LLM request timed out")
         raise LLMError("The AI service timed out.") from exc
+    except openai.APIError as exc:
+        logger.exception("LLM request failed")
+        raise LLMError("The AI service request failed.") from exc
 
     return {
         **state,
@@ -540,15 +536,11 @@ def route_after_retrieval(state: AgentState) -> Literal["generate_response", "de
     return "determine_tool_type"
 
 
-async def execute_tool_node(state: AgentState, db: Session, rag_service: RAGService) -> AgentState:
-    return await execute_tool(state, db, rag_service)
-
-
 def build_agent_graph(chat_model: ChatOpenAI, rag_service: RAGService, db: Session, checkpointer: AsyncPostgresSaver):
     """Build the Aurelia support agent graph."""
 
     async def execute_tool_graph_node(state: AgentState) -> AgentState:
-        return await execute_tool_node(state, db, rag_service)
+        return await execute_tool(state, db, rag_service)
     
     async def execute_write_tool_graph_node(state: AgentState) -> AgentState:
         return await execute_write_tool(state, db)

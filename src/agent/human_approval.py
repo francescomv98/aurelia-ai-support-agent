@@ -1,7 +1,7 @@
 from typing import Literal
 from langgraph.types import interrupt
 from src.agent.state import PendingAction
-from src.logging.logger import logger
+from src.app_logging.logger import logger
 
 def request_human_approval(pending_action: PendingAction) -> Literal["APPROVED", "REJECTED"]:
     """

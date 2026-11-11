@@ -1,4 +1,4 @@
-from src.logging.logger import logger
+from src.app_logging.logger import logger
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 

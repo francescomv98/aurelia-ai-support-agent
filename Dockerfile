@@ -16,6 +16,7 @@ RUN pip install --upgrade pip \
 
 COPY --chown=app:app main.py .
 COPY --chown=app:app src/ ./src/
+COPY --chown=app:app scripts/ ./scripts/
 COPY --chown=app:app data/documents/ ./data/documents/
 
 USER app

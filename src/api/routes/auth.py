@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from src.auth.service import AuthenticationService
 from src.database.session import SessionLocal
-from src.logging.logger import logger
+from src.app_logging.logger import logger
 from src.api.dependencies import get_current_user
 from src.auth.models import AuthenticatedUser
 

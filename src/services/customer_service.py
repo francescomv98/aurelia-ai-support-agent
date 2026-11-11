@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from src.database.models import Customer
-from src.logging.logger import logger
+from src.app_logging.logger import logger
 from src.services.exceptions import DatabaseError
 
 class CustomerResult(BaseModel):

@@ -1,6 +1,6 @@
 from src.agent.state import AgentState
 from src.auth.models import UserRole
-from src.logging.logger import logger
+from src.app_logging.logger import logger
 from src.services.exceptions import AuthorizationError
 
 def authorize_action(state: AgentState) -> AgentState:

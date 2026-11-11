@@ -144,13 +144,13 @@ The application includes JWT-based authentication, authorization controls, reque
 
 ### Logging and Observability
 
-Located in `src/logging/`.
+Located in `src/app_logging/`.
 
 The application configures centralized structured logging and consistent error handling. LangSmith tracing can be enabled through environment variables to support workflow inspection and debugging.
 
 ### Evaluation
 
-Located in `src/evaluation/`, `tests/evaluation/`, and `scripts/run_evaluation.py`.
+Located in `src/evaluation/`, `tests/evaluation/` and `scripts/run_evaluation.py`.
 
 The project includes an evaluation pipeline for validating the evaluation dataset and assessing the behavior of the AI agent.
 
@@ -167,7 +167,7 @@ Run the live evaluation from the repository root:
 python -m scripts.run_evaluation
 ```
 
-The live evaluation requires the database, the vector store, the configured language model, and the services needed by the agent to be available.
+The live evaluation requires the database, the vector store, the configured language model and the services needed by the agent to be available.
 
 ## Tech Stack
 
@@ -210,7 +210,7 @@ aurelia-ai-support-agent/
 │   ├── database/
 │   ├── evaluation/
 │   ├── llm/
-│   ├── logging/
+│   ├── app_logging/
 │   ├── mcp/
 │   ├── rag/
 │   ├── security/

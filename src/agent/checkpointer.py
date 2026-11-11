@@ -1,29 +1,10 @@
 import os
 from dotenv import load_dotenv
 from psycopg.rows import dict_row
-from psycopg_pool import ConnectionPool, AsyncConnectionPool
-from langgraph.checkpoint.postgres import PostgresSaver
+from psycopg_pool import AsyncConnectionPool
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
 load_dotenv()
-
-
-def create_checkpointer() -> PostgresSaver:
-    """Create the synchronous PostgreSQL LangGraph checkpointer."""
-
-    database_url = os.getenv("DATABASE_URL")
-
-    if not database_url:
-        raise RuntimeError("DATABASE_URL environment variable is not set.")
-
-    checkpointer_url = database_url.replace("postgresql+psycopg://", "postgres://")
-
-    connection_pool = ConnectionPool(conninfo=checkpointer_url, kwargs={"autocommit": True})
-
-    checkpointer = PostgresSaver(connection_pool)
-    checkpointer.setup()
-
-    return checkpointer
 
 
 async def create_async_checkpointer() -> tuple[AsyncPostgresSaver, AsyncConnectionPool]:
@@ -42,7 +23,9 @@ async def create_async_checkpointer() -> tuple[AsyncPostgresSaver, AsyncConnecti
             "autocommit": True,
             "prepare_threshold": 0,
             "row_factory": dict_row
-        }
+        },
+        open=False,
+        timeout=10
     )
 
     await connection_pool.open()

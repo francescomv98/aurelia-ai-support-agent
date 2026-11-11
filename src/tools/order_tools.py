@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from src.auth.models import AuthenticatedUser
 from src.database.models import UserRole
-from src.logging.logger import logger
+from src.app_logging.logger import logger
 from src.security.authorization import require_customer_access
 from src.services.order_service import (CreateOrderResult, OrderItemRequest, CancelOrderResult, cancel_order, create_order, get_order_status)
 from src.services.exceptions import AuthorizationError, ValidationError

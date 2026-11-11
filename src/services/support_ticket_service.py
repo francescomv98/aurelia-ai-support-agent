@@ -3,9 +3,12 @@ from typing import Literal
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import SQLAlchemyError
-from src.database.models import Machine, SupportTicket
-from src.logging.logger import logger
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from enum import Enum
+from src.database.models import Machine, SupportTicket, TicketCategory, TicketPriority, TicketStatus
+
+TICKET_NUMBER_ATTEMPTS = 3
+from src.app_logging.logger import logger
 from src.services.exceptions import ValidationError, DatabaseError
 
 class CreateSupportTicketResult(BaseModel):
@@ -24,6 +27,17 @@ class UpdateSupportTicketResult(BaseModel):
     message: str
 
 
+def _normalize_enum(value: str, enum_type: type[Enum], field_name: str) -> str:
+    """Normalize a free-text value (e.g. from the LLM) and ensure it is a valid enum member."""
+    normalized = value.strip().upper().replace(" ", "_").replace("-", "_")
+    allowed = {member.value for member in enum_type}
+
+    if normalized not in allowed:
+        raise ValidationError(f"Invalid ticket {field_name} '{value}'. Allowed values: {', '.join(sorted(allowed))}.")
+
+    return normalized
+
+
 def create_support_ticket(db: Session, customer_id: int, category: str, priority: str, subject: str, description: str, machine_id: int | None = None) -> CreateSupportTicketResult:
     """Create a support ticket for a customer."""
 
@@ -39,6 +53,9 @@ def create_support_ticket(db: Session, customer_id: int, category: str, priority
     if not description.strip():
         raise ValidationError("Ticket description is required.")
 
+    category = _normalize_enum(category, TicketCategory, "category")
+    priority = _normalize_enum(priority, TicketPriority, "priority")
+
     try:
         if machine_id is not None:
             machine = db.scalar(select(Machine).where(Machine.id == machine_id, Machine.customer_id == customer_id))
@@ -50,33 +67,46 @@ def create_support_ticket(db: Session, customer_id: int, category: str, priority
                     message="The specified machine was not found for the customer."
                 )
 
-        existing_ticket_numbers = db.scalars(select(SupportTicket.ticket_number)).all()
+        # Ticket numbers are derived from the current maximum, so concurrent
+        # requests can collide on the unique constraint; retry with a fresh number.
+        for attempt in range(1, TICKET_NUMBER_ATTEMPTS + 1):
+            existing_ticket_numbers = db.scalars(select(SupportTicket.ticket_number)).all()
 
-        ticket_numbers = [
-            int(ticket_number.removeprefix("TCK-"))
-            for ticket_number in existing_ticket_numbers
-            if ticket_number.startswith("TCK-") and ticket_number.removeprefix("TCK-").isdigit()
-        ]
+            ticket_numbers = [
+                int(ticket_number.removeprefix("TCK-"))
+                for ticket_number in existing_ticket_numbers
+                if ticket_number.startswith("TCK-") and ticket_number.removeprefix("TCK-").isdigit()
+            ]
 
-        next_ticket_number = max(ticket_numbers, default=5043) + 1
-        ticket_number = f"TCK-{next_ticket_number}"
+            next_ticket_number = max(ticket_numbers, default=5043) + 1
+            ticket_number = f"TCK-{next_ticket_number}"
 
-        ticket = SupportTicket(
-            ticket_number=ticket_number,
-            category=category.upper(),
-            priority=priority.upper(),
-            status="OPEN",
-            subject=subject.strip(),
-            description=description.strip(),
-            created_at=datetime.now(timezone.utc),
-            customer_id=customer_id,
-            machine_id=machine_id
-        )
+            ticket = SupportTicket(
+                ticket_number=ticket_number,
+                category=category,
+                priority=priority,
+                status="OPEN",
+                subject=subject.strip(),
+                description=description.strip(),
+                created_at=datetime.now(timezone.utc),
+                customer_id=customer_id,
+                machine_id=machine_id
+            )
 
-        db.add(ticket)
-        db.commit()
+            try:
+                db.add(ticket)
+                db.commit()
+                break
 
-        logger.info("Support ticket created", ticket_number=ticket_number, customer_id=customer_id, category=category.upper(), priority=priority.upper())
+            except IntegrityError:
+                db.rollback()
+
+                if attempt == TICKET_NUMBER_ATTEMPTS:
+                    raise
+
+                logger.warning("Ticket number collision, retrying", ticket_number=ticket_number, attempt=attempt)
+
+        logger.info("Support ticket created", ticket_number=ticket_number, customer_id=customer_id, category=category, priority=priority)
 
         return CreateSupportTicketResult(
             status="CREATED",
@@ -106,6 +136,12 @@ def update_support_ticket(db: Session, ticket_number: str, customer_id: int, sta
     if description is not None and not description.strip():
         raise ValidationError("Ticket description cannot be empty.")
 
+    if status is not None:
+        status = _normalize_enum(status, TicketStatus, "status")
+
+    if priority is not None:
+        priority = _normalize_enum(priority, TicketPriority, "priority")
+
     try:
         ticket = db.scalar(select(SupportTicket).where(SupportTicket.ticket_number == ticket_number, SupportTicket.customer_id == customer_id))
 
@@ -119,10 +155,10 @@ def update_support_ticket(db: Session, ticket_number: str, customer_id: int, sta
             )
 
         if status is not None:
-            ticket.status = status.upper()
+            ticket.status = status
 
         if priority is not None:
-            ticket.priority = priority.upper()
+            ticket.priority = priority
 
         if subject is not None:
             ticket.subject = subject.strip()

@@ -1,8 +1,10 @@
 from typing import Literal
+import openai
 from pydantic import BaseModel, Field
 from langchain_openai import ChatOpenAI
 from src.agent.state import AgentState
-from src.logging.logger import logger
+from src.app_logging.logger import logger
+from src.services.exceptions import LLMError
 
 class RouteDecision(BaseModel):
     """Structured decision produced by the agent router."""
@@ -73,6 +75,6 @@ User request:
             "route": decision.route
         }
 
-    except Exception:
+    except openai.APIError as exc:
         logger.exception("Failed to route agent request")
-        raise
+        raise LLMError("The AI service request failed.") from exc

@@ -1,7 +1,15 @@
 from src.agent.state import AgentState, PendingAction
-from src.logging.logger import logger
+from src.app_logging.logger import logger
+from src.services.exceptions import LLMError, ValidationError
+import openai
 from pydantic import BaseModel, Field
 import re
+from typing import Literal
+
+# Keep in sync with TicketCategory / TicketPriority / TicketStatus in src/database/models.py.
+TicketCategoryValue = Literal["TECHNICAL", "MAINTENANCE", "ORDER", "SHIPPING", "WARRANTY", "BILLING", "GENERAL"]
+TicketPriorityValue = Literal["P1", "P2", "P3", "P4"]
+TicketStatusValue = Literal["OPEN", "IN_PROGRESS", "WAITING_CUSTOMER", "RESOLVED", "CLOSED"]
 
 class OrderItem(BaseModel):
     product_code: str = Field(description="The product code requested by the customer, such as AIS-100, AIS-200 or AIS-500.")
@@ -17,8 +25,8 @@ class CancelOrderAction(BaseModel):
 
 
 class CreateSupportTicketAction(BaseModel):
-    category: str = Field(description="The support ticket category, such as TECHNICAL, MAINTENANCE, ORDER, SHIPPING or WARRANTY.")
-    priority: str = Field(description="The ticket priority, such as P1, P2, P3 or P4.")
+    category: TicketCategoryValue = Field(description="The support ticket category.")
+    priority: TicketPriorityValue = Field(description="The ticket priority, from P1 (most urgent) to P4.")
     subject: str = Field(description="A concise subject describing the support issue.")
     description: str = Field(description="A clear description of the issue reported by the customer.")
     machine_serial: str | None = Field(default=None, description="The machine serial number explicitly mentioned by the customer, if applicable.")
@@ -27,10 +35,19 @@ class CreateSupportTicketAction(BaseModel):
 
 class UpdateSupportTicketAction(BaseModel):
     ticket_number: str = Field(description="The support ticket number to update, such as TCK-5021.")
-    status: str | None = Field(default=None, description="The new ticket status, if the customer wants to change it.")
-    priority: str | None = Field(default=None, description="The new ticket priority, such as P1, P2, P3 or P4, if the customer wants to change it.")
+    status: TicketStatusValue | None = Field(default=None, description="The new ticket status, if the customer wants to change it.")
+    priority: TicketPriorityValue | None = Field(default=None, description="The new ticket priority, from P1 (most urgent) to P4, if the customer wants to change it.")
     subject: str | None = Field(default=None, description="The new ticket subject, if the customer wants to change it.")
     description: str | None = Field(default=None, description="The new ticket description, if the customer wants to change it.")
+
+
+def _invoke_structured(chat_model, schema: type[BaseModel], prompt: str):
+    """Run a structured-output extraction, mapping OpenAI failures to LLMError."""
+    try:
+        return chat_model.with_structured_output(schema).invoke(prompt)
+    except openai.APIError as exc:
+        logger.exception("LLM extraction failed", schema=schema.__name__)
+        raise LLMError("The AI service request failed.") from exc
 
 
 WRITE_ACTION_KEYWORDS = {
@@ -39,9 +56,12 @@ WRITE_ACTION_KEYWORDS = {
         "create an order",
         "place order",
         "place an order",
-        "new order",
+        "place a new order",
+        "create a new order",
         "make an order",
-        "purchase"
+        "i want to purchase",
+        "i would like to purchase",
+        "i'd like to purchase"
     ),
     "cancel_order": (
         "cancel order",
@@ -106,9 +126,7 @@ def prepare_action(state: AgentState, chat_model=None) -> AgentState:
         if chat_model is None:
             raise ValueError("Chat model is required to prepare a create_order action.")
 
-        structured_model = chat_model.with_structured_output(CreateOrderAction)
-
-        action = structured_model.invoke(
+        action = _invoke_structured(chat_model, CreateOrderAction,
             f"""
 Extract the order information from the following customer request.
 
@@ -145,9 +163,7 @@ Do not invent products or quantities.
         if chat_model is None:
             raise ValueError("Chat model is required to prepare a cancel_order action.")
 
-        structured_model = chat_model.with_structured_output(CancelOrderAction)
-
-        action = structured_model.invoke(
+        action = _invoke_structured(chat_model, CancelOrderAction,
             f"""
     Extract the order number from the following customer request.
 
@@ -178,9 +194,7 @@ Do not invent products or quantities.
         if chat_model is None:
             raise ValueError("Chat model is required to prepare a create_support_ticket action.")
 
-        structured_model = chat_model.with_structured_output(CreateSupportTicketAction)
-
-        action = structured_model.invoke(
+        action = _invoke_structured(chat_model, CreateSupportTicketAction,
             f"""
     Extract the support ticket information from the following customer request.
 
@@ -228,9 +242,7 @@ Do not invent products or quantities.
         if chat_model is None:
             raise ValueError("Chat model is required to prepare an update_support_ticket action.")
 
-        structured_model = chat_model.with_structured_output(UpdateSupportTicketAction)
-
-        action = structured_model.invoke(
+        action = _invoke_structured(chat_model, UpdateSupportTicketAction,
             f"""
 Extract the support ticket update information from the following customer request.
 
@@ -250,7 +262,7 @@ Do not invent or modify values that are not mentioned.
         )
 
         if all(value is None for value in (action.status, action.priority, action.subject, action.description)):
-            raise ValueError("At least one support ticket field must be provided for update.")
+            raise ValidationError("At least one support ticket field must be provided for update.")
 
         pending_action = PendingAction(
             action_type="update_support_ticket",
@@ -270,16 +282,5 @@ Do not invent or modify values that are not mentioned.
             **state,
             "pending_action": pending_action
         }
-    
-    pending_action = PendingAction(
-        action_type=action_type,
-        description=state["user_query"].strip(),
-        parameters={}
-    )
 
-    logger.info("Write action prepared", action_type=action_type)
-
-    return {
-        **state,
-        "pending_action": pending_action
-    }
+    raise ValueError(f"Unsupported write action: {action_type}")

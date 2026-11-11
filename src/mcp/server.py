@@ -1,3 +1,4 @@
+import os
 from mcp.server import MCPServer
 from src.database.session import SessionLocal
 from src.services.customer_service import get_customer
@@ -176,4 +177,6 @@ def update_support_ticket_tool(ticket_number: str, customer_id: int, status: str
 
 
 if __name__ == "__main__":
-    mcp.run(transport="streamable-http", port=8001)
+    # Binds to localhost by default. Set MCP_HOST=0.0.0.0 only on a private
+    # network (e.g. docker-compose): the tools trust the customer_id they receive.
+    mcp.run(transport="streamable-http", host=os.getenv("MCP_HOST", "127.0.0.1"), port=int(os.getenv("MCP_PORT", "8001")))

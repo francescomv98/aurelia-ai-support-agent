@@ -1,7 +1,7 @@
 from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
 from langchain_postgres import PGVector
-from src.logging.logger import logger
+from src.app_logging.logger import logger
 from sqlalchemy.exc import SQLAlchemyError
 from src.services.exceptions import DatabaseError
 
@@ -12,6 +12,14 @@ class VectorStore:
         self.store = PGVector(embeddings=embeddings, collection_name=collection_name, connection=connection, use_jsonb=True)
 
         logger.info("Vector store initialized", collection=collection_name)
+
+    def reset(self) -> None:
+        """Drop and recreate the collection so a re-ingestion does not duplicate chunks."""
+
+        logger.info("Resetting vector store collection")
+
+        self.store.delete_collection()
+        self.store.create_collection()
 
     def add_documents(self, documents: list[Document]) -> None:
         """Add documents to the vector store."""

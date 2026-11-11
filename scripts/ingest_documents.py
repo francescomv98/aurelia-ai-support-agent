@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 from dotenv import load_dotenv
-from src.logging.logger import configure_logging, logger
+from src.app_logging.logger import configure_logging, logger
 from src.rag.chunker import DocumentChunker
 from src.rag.document_loader import DocumentLoader
 from src.rag.embedding import create_embeddings
@@ -37,6 +37,9 @@ def main() -> None:
         documents = loader.load_directory(documents_path)
         chunks = chunker.split(documents)
 
+        # Rebuild the collection from scratch: re-running the script must not
+        # duplicate chunks, and removed/changed documents must not linger.
+        vector_store.reset()
         vector_store.add_documents(chunks)
 
         logger.info("Document ingestion completed successfully", document_count=len(documents), chunk_count=len(chunks))

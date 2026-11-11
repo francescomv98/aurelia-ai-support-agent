@@ -1,7 +1,7 @@
 from src.database.base import Base
 from src.database.session import engine
 from src.database.models import (Customer, MaintenanceRecord, Machine, Order, OrderItem, Product, Role, Shipment, SupportTicket, User)
-from src.logging.logger import configure_logging, logger
+from src.app_logging.logger import configure_logging, logger
 
 def main() -> None:
     configure_logging()

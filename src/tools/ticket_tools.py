@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from src.auth.models import AuthenticatedUser
 from src.database.models import UserRole
-from src.logging.logger import logger
+from src.app_logging.logger import logger
 from src.security.authorization import require_customer_access
 from src.services.ticket_service import TicketResult, get_machine_ticket
 from src.services.exceptions import AuthorizationError, ValidationError

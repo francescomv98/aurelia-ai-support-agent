@@ -2,7 +2,7 @@ import os
 from datetime import datetime, timedelta, timezone
 import jwt
 from src.auth.models import AuthenticatedUser
-from src.logging.logger import logger
+from src.app_logging.logger import logger
 
 def _get_jwt_secret() -> str:
     """Return the JWT signing secret."""

@@ -1,6 +1,6 @@
 import os
 from langchain_openai import ChatOpenAI
-from src.logging.logger import logger
+from src.app_logging.logger import logger
 
 def create_chat_model() -> ChatOpenAI:
     """Create the OpenAI chat model."""

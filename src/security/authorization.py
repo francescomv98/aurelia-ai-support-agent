@@ -1,7 +1,7 @@
 from collections.abc import Collection
 from src.auth.models import AuthenticatedUser
 from src.database.models import UserRole
-from src.logging.logger import logger
+from src.app_logging.logger import logger
 from src.services.exceptions import AuthorizationError
 
 def require_role(user: AuthenticatedUser, allowed_roles: Collection[UserRole]) -> None:

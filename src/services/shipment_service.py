@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from src.database.models import Order, Shipment
-from src.logging.logger import logger
+from src.app_logging.logger import logger
 from src.services.exceptions import DatabaseError
 
 class ShipmentResult(BaseModel):
@@ -40,17 +40,20 @@ def get_shipment(db: Session, tracking_number: str, customer_id: int) -> Shipmen
             message=f"The shipment {tracking_number} was not found in the system."
         )
 
+    # Status columns are plain strings in the DB; tolerate enum instances too.
+    shipment_status = getattr(shipment.status, "value", shipment.status)
+
     logger.info("Shipment retrieved", tracking_number=tracking_number, customer_id=customer_id)
 
     return ShipmentResult(
         status="FOUND",
         tracking_number=shipment.tracking_number,
         carrier=shipment.carrier,
-        shipment_status=shipment.status.value,
+        shipment_status=shipment_status,
         estimated_delivery=shipment.estimated_delivery,
         message=(
             f"Shipment {shipment.tracking_number} is currently "
-            f"{shipment.status.value}. "
+            f"{shipment_status}. "
             f"Carrier: {shipment.carrier}. "
             f"Estimated delivery: "
             f"{shipment.estimated_delivery.isoformat() if shipment.estimated_delivery else 'not available'}."

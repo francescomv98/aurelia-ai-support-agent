@@ -1,6 +1,6 @@
 import os
 from langchain_openai import OpenAIEmbeddings
-from src.logging.logger import logger
+from src.app_logging.logger import logger
 
 def create_embeddings() -> OpenAIEmbeddings:
     """Create the OpenAI embeddings model."""

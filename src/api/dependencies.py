@@ -2,7 +2,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from src.auth.jwt import decode_access_token
 from src.auth.models import AuthenticatedUser
-from src.logging.logger import logger
+from src.app_logging.logger import logger
 
 security = HTTPBearer()
 

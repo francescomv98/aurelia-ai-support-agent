@@ -1,10 +1,12 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from src.database.models import Order, OrderItem, Product
+
+ORDER_NUMBER_ATTEMPTS = 3
 from typing import Literal
 from pydantic import BaseModel
-from src.logging.logger import logger
+from src.app_logging.logger import logger
 from decimal import Decimal
 from datetime import datetime, timezone
 from src.services.exceptions import ValidationError, DatabaseError
@@ -120,40 +122,54 @@ def create_order(db: Session, customer_id: int, items: list[OrderItemRequest]) -
 
             normalized_items.append((product, item.quantity, unit_price))
 
-        existing_orders = db.scalars(select(Order.order_number)).all()
+        # Order numbers are derived from the current maximum, so two concurrent
+        # requests can pick the same one. The unique constraint catches that;
+        # retry with a fresh number instead of failing the request.
+        for attempt in range(1, ORDER_NUMBER_ATTEMPTS + 1):
+            existing_orders = db.scalars(select(Order.order_number)).all()
 
-        order_numbers = [
-            int(order_number.removeprefix("ORD-"))
-            for order_number in existing_orders
-            if order_number.startswith("ORD-")
-            and order_number.removeprefix("ORD-").isdigit()
-        ]
+            order_numbers = [
+                int(order_number.removeprefix("ORD-"))
+                for order_number in existing_orders
+                if order_number.startswith("ORD-")
+                and order_number.removeprefix("ORD-").isdigit()
+            ]
 
-        next_order_number = max(order_numbers, default=10240) + 1
-        order_number = f"ORD-{next_order_number}"
+            next_order_number = max(order_numbers, default=10240) + 1
+            order_number = f"ORD-{next_order_number}"
 
-        order = Order(
-            order_number=order_number,
-            status="PENDING",
-            customer_id=customer_id,
-            order_date=datetime.now(timezone.utc)
-        )
-
-        db.add(order)
-        db.flush()
-
-        order_items = [
-            OrderItem(
-                order_id=order.id,
-                product_id=product.id,
-                quantity=quantity,
-                unit_price=unit_price
+            order = Order(
+                order_number=order_number,
+                status="PENDING",
+                customer_id=customer_id,
+                order_date=datetime.now(timezone.utc)
             )
-            for product, quantity, unit_price in normalized_items
-        ]
 
-        db.add_all(order_items)
-        db.commit()
+            try:
+                db.add(order)
+                db.flush()
+
+                order_items = [
+                    OrderItem(
+                        order_id=order.id,
+                        product_id=product.id,
+                        quantity=quantity,
+                        unit_price=unit_price
+                    )
+                    for product, quantity, unit_price in normalized_items
+                ]
+
+                db.add_all(order_items)
+                db.commit()
+                break
+
+            except IntegrityError:
+                db.rollback()
+
+                if attempt == ORDER_NUMBER_ATTEMPTS:
+                    raise
+
+                logger.warning("Order number collision, retrying", order_number=order_number, attempt=attempt)
 
         logger.info("Order created", order_number=order_number, customer_id=customer_id, item_count=len(order_items))
 

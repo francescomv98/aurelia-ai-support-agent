@@ -13,7 +13,7 @@ from src.rag.embedding import create_embeddings
 from src.rag.vector_store import VectorStore
 from src.rag.retriever import Retriever
 from src.evaluation.evaluator import evaluate_case
-from src.logging.logger import logger
+from src.app_logging.logger import logger
 import asyncio
 import os
 

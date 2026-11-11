@@ -1,6 +1,6 @@
 from typing import Literal
 from pydantic import BaseModel
-from src.logging.logger import logger
+from src.app_logging.logger import logger
 from src.services.exceptions import ValidationError, DatabaseError
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
@@ -108,7 +108,7 @@ def get_maintenance_history(db: Session, machine_serial: str, customer_id: int) 
 
     records = [
         (
-            f"{record.maintenance_type.value} maintenance performed on "
+            f"{getattr(record.maintenance_type, 'value', record.maintenance_type)} maintenance performed on "
             f"{record.performed_at.isoformat()}. "
             f"Operating hours: {record.operating_hours}. "
             f"Notes: {record.notes or 'none'}."

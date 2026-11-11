@@ -1,7 +1,9 @@
+import os
 from mcp import Client
+from src.app_logging.logger import logger
 from src.services.exceptions import ExternalServiceError
 
-MCP_SERVER_URL = "http://localhost:8001/mcp"
+MCP_SERVER_URL = os.getenv("MCP_SERVER_URL", "http://localhost:8001/mcp")
 
 
 def create_mcp_client() -> Client:
@@ -23,5 +25,11 @@ async def call_mcp_tool(client: Client, tool_name: str, arguments: dict[str, obj
 
     if not text_content:
         raise ExternalServiceError("MCP service returned an invalid response.")
+
+    # A tool that raised on the server side comes back as an error result.
+    # Never hand its error text to the LLM as if it were enterprise data.
+    if result.is_error:
+        logger.error("MCP tool returned an error", tool_name=tool_name, error="\n".join(text_content))
+        raise ExternalServiceError(f"MCP tool {tool_name} failed.")
 
     return "\n".join(text_content)

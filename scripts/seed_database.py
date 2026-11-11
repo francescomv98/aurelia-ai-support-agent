@@ -2,7 +2,7 @@ import os
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from src.auth.password import hash_password
-from src.logging.logger import configure_logging, logger
+from src.app_logging.logger import configure_logging, logger
 from datetime import datetime
 from decimal import Decimal
 from src.database.models import (Customer, MaintenanceRecord, Machine, Order, OrderItem, Product, Role, Shipment, SupportTicket, User)

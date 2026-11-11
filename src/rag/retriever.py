@@ -1,5 +1,5 @@
 from langchain_core.documents import Document
-from src.logging.logger import logger
+from src.app_logging.logger import logger
 from src.rag.vector_store import VectorStore
 
 class Retriever:

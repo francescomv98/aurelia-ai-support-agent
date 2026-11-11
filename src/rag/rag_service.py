@@ -1,5 +1,5 @@
 from langchain_core.documents import Document
-from src.logging.logger import logger
+from src.app_logging.logger import logger
 from src.rag.retriever import Retriever
 import re
 

@@ -1,18 +1,27 @@
 import os
+from contextlib import asynccontextmanager
 from src.security.rate_limiter import RateLimiter
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 from src.api.routes.auth import router as auth_router
-from src.api.routes.chat import router as chat_router
-from src.logging.logger import configure_logging, logger
+from src.api.routes.chat import close_checkpointer, router as chat_router
+from src.app_logging.logger import configure_logging, logger
 from src.services.exceptions import (ApplicationError, AuthorizationError, DatabaseError, ExternalServiceError, LLMError, ValidationError)
 
 configure_logging()
 
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    yield
+    await close_checkpointer()
+
+
 app = FastAPI(
     title="Aurelia AI Support Agent",
     description="Enterprise AI support agent for Aurelia Industrial Systems.",
-    version="0.1.0"
+    version="0.1.0",
+    lifespan=lifespan
 )
 
 app.state.rate_limiter = RateLimiter(

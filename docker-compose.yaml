@@ -19,6 +19,25 @@ services:
       retries: 5
       start_period: 10s
 
+  mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aurelia-mcp
+    restart: unless-stopped
+    command: ["python", "-m", "src.mcp.server"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://aurelia:${POSTGRES_PASSWORD}@postgres:5432/aurelia
+      MCP_HOST: 0.0.0.0
+      MCP_PORT: "8001"
+    env_file:
+      - .env
+    # No published port: the MCP tools trust the customer_id they receive,
+    # so the server must only be reachable from the api container.
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   api:
     build:
       context: .
@@ -27,6 +46,7 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql+psycopg://aurelia:${POSTGRES_PASSWORD}@postgres:5432/aurelia
+      MCP_SERVER_URL: http://mcp:8001/mcp
     env_file:
       - .env
     ports:
@@ -34,6 +54,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      mcp:
+        condition: service_started
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/docs', timeout=5)"]
       interval: 30s

@@ -1,7 +1,7 @@
 from pathlib import Path
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_core.documents import Document
-from src.logging.logger import logger
+from src.app_logging.logger import logger
 
 class DocumentLoader:
     """Load PDF documents from the knowledge base."""

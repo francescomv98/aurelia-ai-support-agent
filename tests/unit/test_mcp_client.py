@@ -44,6 +44,7 @@ async def test_call_mcp_tool_returns_text_response() -> None:
 
     result = MagicMock()
     result.content = [MagicMock(text="Order ORD-10241 is DELIVERED.")]
+    result.is_error = False
 
     client.call_tool = AsyncMock(return_value=result)
 
@@ -69,6 +70,7 @@ async def test_call_mcp_tool_combines_multiple_text_contents() -> None:
 
     result = MagicMock()
     result.content = [MagicMock(text="First response."), MagicMock(text="Second response.")]
+    result.is_error = False
 
     client.call_tool = AsyncMock(return_value=result)
 
@@ -103,6 +105,20 @@ async def test_call_mcp_tool_raises_external_service_error_on_empty_response() -
 
     with pytest.raises(ExternalServiceError, match="MCP service returned an empty response"):
         await call_mcp_tool(client=client, tool_name="test_tool", arguments={})
+
+
+@pytest.mark.anyio
+async def test_call_mcp_tool_raises_external_service_error_on_tool_error() -> None:
+    client = MagicMock()
+
+    result = MagicMock()
+    result.content = [MagicMock(text="ValidationError: At least one order item is required.")]
+    result.is_error = True
+
+    client.call_tool = AsyncMock(return_value=result)
+
+    with pytest.raises(ExternalServiceError, match="MCP tool create_order_tool failed"):
+        await call_mcp_tool(client=client, tool_name="create_order_tool", arguments={})
 
 
 @pytest.mark.anyio

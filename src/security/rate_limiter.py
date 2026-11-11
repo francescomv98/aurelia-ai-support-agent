@@ -16,6 +16,7 @@ class RateLimiter:
         self.window_seconds = window_seconds
         self._requests: dict[str, deque[float]] = defaultdict(deque)
         self._lock = Lock()
+        self._last_purge = time.monotonic()
 
     def is_allowed(self, key: str) -> bool:
         """Return whether a request is allowed for the given key."""
@@ -32,4 +33,20 @@ class RateLimiter:
                 return False
 
             timestamps.append(now)
+            self._purge_idle_keys(window_start)
             return True
+
+    def _purge_idle_keys(self, window_start: float) -> None:
+        """Drop clients with no requests in the current window so memory stays bounded.
+
+        Runs at most once per window; must be called with the lock held.
+        """
+        if self._last_purge > window_start:
+            return
+
+        idle_keys = [key for key, timestamps in self._requests.items() if not timestamps or timestamps[-1] <= window_start]
+
+        for key in idle_keys:
+            del self._requests[key]
+
+        self._last_purge = time.monotonic()

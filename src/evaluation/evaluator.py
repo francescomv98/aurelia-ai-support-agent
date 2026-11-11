@@ -157,9 +157,6 @@ def evaluate_case(case: dict[str, Any], result: dict[str, Any]) -> tuple[bool, s
     tool_result = str(result.get("tool_result", "")).strip()
     actual = f"{actual_response} {tool_result}".strip()
 
-    print(f"\n[DEBUG] Agent response:\n{actual_response}")
-    print(f"[DEBUG] Tool result:\n{tool_result}")
-
     if not actual:
         return False, "Agent returned an empty result."
 

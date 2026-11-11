@@ -1,3 +1,4 @@
+import asyncio
 import os
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -7,7 +8,7 @@ from src.api.dependencies import get_current_user
 from src.auth.models import AuthenticatedUser
 from src.database.session import SessionLocal
 from src.llm.openai_client import create_chat_model
-from src.logging.logger import logger
+from src.app_logging.logger import logger
 from src.rag.embedding import create_embeddings
 from src.rag.rag_service import RAGService
 from src.rag.retriever import Retriever
@@ -20,6 +21,7 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 
 _checkpointer = None
 _checkpointer_pool = None
+_checkpointer_lock = asyncio.Lock()
 
 
 async def get_checkpointer():
@@ -27,9 +29,23 @@ async def get_checkpointer():
     global _checkpointer, _checkpointer_pool
 
     if _checkpointer is None:
-        _checkpointer, _checkpointer_pool = await create_async_checkpointer()
+        # Without the lock, concurrent first requests would each open a pool and leak all but one.
+        async with _checkpointer_lock:
+            if _checkpointer is None:
+                _checkpointer, _checkpointer_pool = await create_async_checkpointer()
 
     return _checkpointer
+
+
+async def close_checkpointer() -> None:
+    """Close the checkpointer connection pool, if one was opened."""
+    global _checkpointer, _checkpointer_pool
+
+    if _checkpointer_pool is not None:
+        await _checkpointer_pool.close()
+
+    _checkpointer = None
+    _checkpointer_pool = None
 
 
 class ChatRequest(BaseModel):
@@ -100,6 +116,20 @@ async def chat(request: ChatRequest, current_user: AuthenticatedUser = Depends(g
 
         agent_graph = build_agent_graph(chat_model=chat_model, rag_service=rag_service, db=db, checkpointer=checkpointer)
 
+        config = { "configurable": { "thread_id": thread_id } }
+
+        if request.thread_id:
+            # Writing to another user's thread would discard their pending approval.
+            existing_state = await agent_graph.aget_state(config)
+            thread_user = existing_state.values.get("authenticated_user") if existing_state.values else None
+
+            if thread_user is not None and thread_user.user_id != current_user.user_id:
+                logger.warning("Unauthorized chat thread access attempt", user_id=current_user.user_id, thread_id=thread_id)
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You are not authorized to use this chat thread."
+                )
+
         initial_state = {
             "user_query": request.message,
             "authenticated_user": current_user,
@@ -111,8 +141,6 @@ async def chat(request: ChatRequest, current_user: AuthenticatedUser = Depends(g
             "tool_result": "",
             "response": ""
         }
-
-        config = { "configurable": { "thread_id": thread_id } }
 
         result = await agent_graph.ainvoke(initial_state, config=config)
 

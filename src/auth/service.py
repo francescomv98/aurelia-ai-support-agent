@@ -5,7 +5,7 @@ from src.auth.jwt import create_access_token
 from src.auth.models import AuthenticatedUser
 from src.auth.password import verify_password
 from src.database.models import User
-from src.logging.logger import logger
+from src.app_logging.logger import logger
 from src.services.exceptions import DatabaseError
 
 class AuthenticationService:
