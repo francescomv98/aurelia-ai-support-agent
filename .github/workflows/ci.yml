@@ -1,22 +1,77 @@
 name: CI
 
+# Pushes to main, develop and version tags run this workflow through cd.yml,
+# so each of those pushes is tested exactly once before its image is published.
 on:
-  push:
-    branches:
-      - main
-      - develop
-      - "release/**"
-      - "hotfix/**"
   pull_request:
     branches:
       - main
       - develop
+  push:
+    branches:
+      - "release/**"
+      - "hotfix/**"
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  # A new commit on the same PR or branch makes the older run obsolete.
+  group: ci-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install ruff
+        run: pip install "$(grep '^ruff==' requirements-dev.txt)"
+
+      - name: Run ruff
+        run: ruff check --output-format=github .
+
+  dependency-audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install pip-audit
+        run: pip install "$(grep '^pip-audit==' requirements-dev.txt)"
+
+      # Fails when a pinned runtime dependency has a known vulnerability.
+      - name: Audit runtime dependencies
+        run: pip-audit -r requirements.txt --progress-spinner off
+
   tests:
     name: Run tests
     runs-on: ubuntu-latest
-    
+    timeout-minutes: 30
+
     services:
       postgres:
         image: pgvector/pgvector:pg16
@@ -51,13 +106,12 @@ jobs:
         with:
           python-version: "3.13"
           cache: pip
-          cache-dependency-path: requirements.txt
+          cache-dependency-path: requirements-dev.txt
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest pytest-asyncio
+          pip install -r requirements-dev.txt
 
       - name: Initialize database
         run: python -m scripts.init_database
@@ -106,35 +160,82 @@ jobs:
                   break
           else:
               print("MCP server did not become reachable")
-              try:
-                  with open("mcp-server.log", encoding="utf-8") as log:
-                      print(log.read())
-              except OSError as exc:
-                  print(f"Unable to read MCP server log: {exc}")
-
               raise SystemExit(1)
           PY
 
+      # Coverage accumulates across the three suites and is reported once at the end.
       - name: Run unit tests
-        run: pytest tests/unit -v
+        run: pytest tests/unit -v --cov=src --cov-report=
 
       - name: Run evaluation tests
-        run: pytest tests/evaluation -v
+        run: pytest tests/evaluation -v --cov=src --cov-append --cov-report=
 
       # Integration tests write to the seeded database and call the MCP server,
       # so they run after the unit tests against the same services.
       - name: Run integration tests
-        run: pytest tests/integration -v
+        run: pytest tests/integration -v --cov=src --cov-append --cov-report=
+
+      - name: Coverage report
+        run: |
+          coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY"
+          coverage xml
+          coverage report --fail-under=80
+
+      - name: Show MCP server log
+        if: failure()
+        run: cat mcp-server.log || true
+
+      - name: Upload coverage and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            coverage.xml
+            mcp-server.log
+          if-no-files-found: ignore
+          retention-days: 14
 
   build-docker:
-    name: Build Docker image
+    name: Build and smoke-test Docker image
     runs-on: ubuntu-latest
-    needs: tests
+    timeout-minutes: 20
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: aurelia-ai-support-agent:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Proves the image starts and serves HTTP. /health needs no database or OpenAI,
+      # so placeholder values are enough for the settings read at import time.
+      - name: Smoke-test the image
         run: |
-          docker build -t aurelia-ai-support-agent:${{ github.sha }} .
+          docker run -d --name aurelia-api -p 8000:8000 \
+            -e DATABASE_URL=postgresql+psycopg://placeholder:placeholder@localhost:5432/placeholder \
+            -e JWT_SECRET_KEY=ci-only-jwt-secret-key-not-for-production-use \
+            -e OPENAI_API_KEY=placeholder \
+            aurelia-ai-support-agent:ci
+
+          for attempt in $(seq 1 30); do
+            if curl --silent --fail http://localhost:8000/health; then
+              echo
+              echo "Image is healthy"
+              exit 0
+            fi
+            sleep 1
+          done
+
+          echo "Image did not become healthy"
+          docker logs aurelia-api
+          exit 1

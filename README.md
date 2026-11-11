@@ -26,7 +26,7 @@ The project demonstrates how to build an AI agent that integrates technical docu
 - Unit, integration and evaluation tests
 - Docker and Docker Compose support
 - GitHub Actions continuous integration
-- Automated Docker image build
+- Continuous delivery of Docker images to GitHub Container Registry
 - LangSmith tracing configuration
 
 ## Architecture
@@ -303,6 +303,14 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
+For development (tests, lint and dependency audit), install the dev requirements instead:
+
+```bash
+pip install -r requirements-dev.txt
+ruff check .
+pip-audit -r requirements.txt
+```
+
 ## Environment Configuration
 
 Create a local `.env` file using `.env.example` as a template.
@@ -456,21 +464,36 @@ python -m pytest tests/evaluation -v
 
 Integration and evaluation tests may require a configured database, initialized sample data, or other services depending on the individual test.
 
-## Continuous Integration
+## Continuous Integration and Delivery
 
-The GitHub Actions workflow in `.github/workflows/ci.yml` automates selected validation steps.
+The project follows Git Flow: `main` holds released code, `develop` collects finished work, and `feature/*`, `release/*` and `hotfix/*` branches are short-lived.
 
-The workflow:
+### CI (`.github/workflows/ci.yml`)
 
-1. Checks out the repository.
-2. Sets up the Python environment and installs dependencies.
-3. Starts a PostgreSQL service with pgvector.
-4. Initializes and seeds the database.
-5. Starts the MCP server for the test environment.
-6. Executes the unit test suite.
-7. Builds the Docker image after the test job succeeds.
+Runs on pull requests into `main` or `develop`, on pushes to `release/*` and `hotfix/*` branches, and inside the CD workflow. Its jobs run in parallel:
 
-The Docker image is built as a CI validation step. The workflow does not publish the image to a container registry or deploy the application to a remote environment.
+| Job | What it checks |
+|---|---|
+| Lint | `ruff check` (configured in `ruff.toml`) |
+| Dependency audit | `pip-audit` on `requirements.txt`; fails on known vulnerabilities |
+| Run tests | Unit, evaluation and integration tests against PostgreSQL (pgvector) and the MCP server, with a coverage report (minimum 80%) in the job summary |
+| Build and smoke-test Docker image | Builds the image, starts it and waits for `GET /health` |
+
+### CD (`.github/workflows/cd.yml`)
+
+Runs on pushes to `develop` and `main` and on version tags (`v1.2.3`). It runs the full CI first and, only if it passes, publishes the image to GitHub Container Registry:
+
+| Trigger | Image tags |
+|---|---|
+| Push to `develop` | `develop`, `sha-<commit>` |
+| Push to `main` | `main`, `latest`, `sha-<commit>` |
+| Tag `v1.2.3` | `1.2.3`, `1.2`, `sha-<commit>` |
+
+```bash
+docker pull ghcr.io/<owner>/<repository>:latest
+```
+
+The same image runs the API and the MCP server. Deploying it to a server is not automated yet.
 
 ## Project Goals
 
