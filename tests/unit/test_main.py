@@ -97,3 +97,22 @@ def test_rate_limit_returns_429_when_limit_is_exceeded():
     assert third_response.status_code == 429
 
     assert third_response.json() == {"detail": "Too many requests. Please try again later."}
+
+
+def test_health_returns_ok():
+    response = client.get("/health")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+
+def test_health_is_not_rate_limited():
+    original_limiter = app.state.rate_limiter
+    app.state.rate_limiter = RateLimiter(max_requests=1, window_seconds=60)
+
+    try:
+        responses = [client.get("/health") for _ in range(3)]
+    finally:
+        app.state.rate_limiter = original_limiter
+
+    assert [response.status_code for response in responses] == [200, 200, 200]

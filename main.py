@@ -10,6 +10,8 @@ from src.services.exceptions import (ApplicationError, AuthorizationError, Datab
 
 configure_logging()
 
+HEALTH_PATH = "/health"
+
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
@@ -105,6 +107,10 @@ async def rate_limit_middleware(request: Request, call_next):
     """Apply rate limiting to incoming HTTP requests."""
     client_host = request.client.host if request.client else "unknown"
 
+    # Container health probes must never be throttled, or a busy client could mark the service unhealthy.
+    if request.url.path == HEALTH_PATH:
+        return await call_next(request)
+
     if not app.state.rate_limiter.is_allowed(client_host):
         logger.warning("Rate limit exceeded", client=client_host, path=request.url.path, method=request.method)
 
@@ -116,6 +122,12 @@ async def rate_limit_middleware(request: Request, call_next):
         )
 
     return await call_next(request)
+
+
+@app.get(HEALTH_PATH, include_in_schema=False)
+async def health() -> dict[str, str]:
+    """Liveness probe: the process is up and serving HTTP. It does not call the database or OpenAI."""
+    return {"status": "ok"}
 
 
 app.include_router(auth_router)
