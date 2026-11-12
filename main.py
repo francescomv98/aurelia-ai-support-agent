@@ -5,8 +5,10 @@ from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 from src.api.routes.auth import router as auth_router
 from src.api.routes.chat import close_checkpointer, router as chat_router
+from src.api.routes.documents import router as documents_router
 from src.app_logging.logger import configure_logging, logger
-from src.services.exceptions import (ApplicationError, AuthorizationError, DatabaseError, ExternalServiceError, LLMError, ValidationError)
+from src.services.exceptions import (ApplicationError, AuthorizationError, DatabaseError, ExternalServiceError, LLMError, NotFoundError,
+                                     ValidationError)
 
 configure_logging()
 
@@ -48,6 +50,16 @@ async def authorization_error_handler(request: Request, exc: AuthorizationError)
 
     return JSONResponse(
         status_code=status.HTTP_403_FORBIDDEN,
+        content={"detail": str(exc)}
+    )
+
+
+@app.exception_handler(NotFoundError)
+async def not_found_error_handler(request: Request, exc: NotFoundError) -> JSONResponse:
+    logger.warning("Resource not found", path=request.url.path, method=request.method, error=str(exc))
+
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND,
         content={"detail": str(exc)}
     )
 
@@ -132,5 +144,6 @@ async def health() -> dict[str, str]:
 
 app.include_router(auth_router)
 app.include_router(chat_router)
+app.include_router(documents_router)
 
 logger.info("Aurelia AI Support Agent starting")

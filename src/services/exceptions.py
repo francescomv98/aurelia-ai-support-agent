@@ -20,3 +20,7 @@ class LLMError(ApplicationError):
 
 class ExternalServiceError(ApplicationError):
     """Raised when an external service operation fails."""
+
+
+class NotFoundError(ApplicationError):
+    """Raised when a requested resource does not exist."""

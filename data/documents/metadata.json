@@ -1,0 +1,17 @@
+{
+  "company_overview.pdf": {"date": "2026-09-30", "valid": true, "reviewed_at": null},
+  "organizational_structure.pdf": {"date": "2026-01-05", "valid": true, "reviewed_at": null},
+  "customer_faq.pdf": {"date": "2026-01-25", "valid": true, "reviewed_at": null},
+  "preventive_maintenance.pdf": {"date": "2026-01-20", "valid": true, "reviewed_at": null},
+  "troubleshooting_guide.pdf": {"date": "2026-01-20", "valid": true, "reviewed_at": null},
+  "AIS-100_user_manual.pdf": {"date": "2026-01-15", "valid": true, "reviewed_at": null},
+  "AIS-200_user_manual.pdf": {"date": "2026-01-15", "valid": true, "reviewed_at": null},
+  "AIS-500_user_manual.pdf": {"date": "2026-01-15", "valid": true, "reviewed_at": null},
+  "customer_support_policy.pdf": {"date": "2026-01-01", "valid": true, "reviewed_at": null},
+  "data_privacy_policy.pdf": {"date": "2026-02-01", "valid": true, "reviewed_at": null},
+  "security_policy.pdf": {"date": "2026-01-15", "valid": true, "reviewed_at": null},
+  "warranty_policy.pdf": {"date": "2026-01-01", "valid": true, "reviewed_at": null},
+  "AIS-100_technical_specifications.pdf": {"date": "2026-01-20", "valid": true, "reviewed_at": null},
+  "AIS-200_technical_specifications.pdf": {"date": "2026-01-20", "valid": true, "reviewed_at": null},
+  "AIS-500_technical_specifications.pdf": {"date": "2026-01-20", "valid": true, "reviewed_at": null}
+}

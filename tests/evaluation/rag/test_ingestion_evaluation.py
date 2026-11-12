@@ -1,11 +1,16 @@
+import re
+from datetime import datetime
 from pathlib import Path
 from langchain_core.documents import Document
-from scripts.evaluate_rag import load_cases
+from scripts.evaluate_rag import DOCUMENTS_PATH, load_cases
 from src.evaluation.rag.ingestion import evaluate_ingestion
+from src.rag.document_metadata import MANIFEST_FILE_NAME, load_manifest
 
 
 def make_document(content: str, source: str = "manual.pdf", page: int = 0, category: str = "manuals") -> Document:
-    return Document(page_content=content, metadata={"source": source, "category": category, "page": page})
+    metadata = {"document_id": f"id-{source}", "source": source, "category": category, "page": page, "doc_type": "manual", "title": "Manual", "chunk_index": page, "valid": True}
+
+    return Document(page_content=content, metadata=metadata)
 
 
 def check(report, name: str):
@@ -82,7 +87,8 @@ def test_fact_in_wrong_source_is_not_covered() -> None:
 def test_vector_store_with_current_chunks_passes() -> None:
     chunks = [make_document(CHUNK)]
 
-    report = evaluate_ingestion(pdf_files=[Path("manual.pdf")], documents=chunks, chunks=chunks, cases=[], chunk_size=1000, stored_texts=[CHUNK])
+    report = evaluate_ingestion(pdf_files=[Path("manual.pdf")], documents=chunks, chunks=chunks, cases=[], chunk_size=1000,
+                                stored_chunks=[make_document(CHUNK)])
 
     assert check(report, "vector_store_up_to_date").status == "PASS"
 
@@ -92,12 +98,32 @@ def test_stale_vector_store_fails_even_with_same_count() -> None:
     chunks = [make_document(CHUNK)]
 
     report = evaluate_ingestion(pdf_files=[Path("manual.pdf")], documents=chunks, chunks=chunks, cases=[], chunk_size=1000,
-                                stored_texts=["Old chunk produced by a previous chunker."])
+                                stored_chunks=[make_document("Old chunk produced by a previous chunker.")])
 
     stale = check(report, "vector_store_up_to_date")
 
     assert stale.status == "FAIL"
     assert "ingest_documents" in stale.details[0]
+
+
+def test_vector_store_with_outdated_metadata_fails() -> None:
+    # Same text, but the owner has since invalidated the document: the store must be rebuilt.
+    current = make_document(CHUNK)
+    current.metadata["valid"] = False
+
+    report = evaluate_ingestion(pdf_files=[Path("manual.pdf")], documents=[current], chunks=[current], cases=[], chunk_size=1000,
+                                stored_chunks=[make_document(CHUNK)])
+
+    assert check(report, "vector_store_up_to_date").status == "FAIL"
+
+
+def test_chunk_without_new_metadata_fields_fails() -> None:
+    chunk = make_document(CHUNK)
+    del chunk.metadata["chunk_index"]
+
+    report = evaluate_ingestion(pdf_files=[Path("manual.pdf")], documents=[chunk], chunks=[chunk], cases=[], chunk_size=1000)
+
+    assert check(report, "chunk_metadata_complete").status == "FAIL"
 
 
 def test_real_knowledge_base_ingests_cleanly(knowledge_base) -> None:
@@ -109,3 +135,29 @@ def test_real_knowledge_base_ingests_cleanly(knowledge_base) -> None:
     failures = {item.name: item.details for item in report.checks if item.status == "FAIL"}
 
     assert report.passed, failures
+
+
+def test_manifest_covers_every_pdf(knowledge_base) -> None:
+    manifest = load_manifest(DOCUMENTS_PATH / MANIFEST_FILE_NAME)
+
+    missing = sorted(pdf.name for pdf in knowledge_base["pdf_files"] if pdf.name not in manifest)
+
+    assert not missing, f"Add these files to data/documents/{MANIFEST_FILE_NAME}: {missing}"
+
+
+def test_manifest_dates_match_the_effective_date_in_each_pdf(knowledge_base) -> None:
+    """The owner-set date must agree with the "Effective Date: January 15, 2026" line on the first page."""
+
+    mismatches = []
+
+    for document in knowledge_base["documents"]:
+        if document.metadata["page"] != 0:
+            continue
+
+        match = re.search(r"Effective Date:\s*([A-Z][a-z]+ \d{1,2}, \d{4})", document.page_content)
+        printed = datetime.strptime(match.group(1), "%B %d, %Y").date().isoformat() if match else None
+
+        if printed != document.metadata["date"]:
+            mismatches.append(f"{document.metadata['source']}: manifest {document.metadata['date']}, PDF {printed}")
+
+    assert not mismatches, mismatches

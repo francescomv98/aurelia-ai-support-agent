@@ -6,9 +6,39 @@ from src.services.exceptions import ExternalServiceError
 MCP_SERVER_URL = os.getenv("MCP_SERVER_URL", "http://localhost:8001/mcp")
 
 
-def create_mcp_client() -> Client:
-    """Create an MCP client for the Aurelia MCP server."""
-    return Client(MCP_SERVER_URL)
+class MCPConnection:
+    """Async context manager around the MCP client that reports connection failures as ExternalServiceError.
+
+    The client connects in __aenter__, outside call_mcp_tool's error handling:
+    without this wrapper an unreachable server surfaced as a raw ExceptionGroup
+    and the API answered 500 instead of 503.
+    """
+
+    def __init__(self, client: Client) -> None:
+        self._client = client
+
+    async def __aenter__(self) -> Client:
+        try:
+            return await self._client.__aenter__()
+        except Exception as exc:
+            logger.error("MCP server unreachable", url=MCP_SERVER_URL, error=repr(exc))
+            raise ExternalServiceError("MCP service is currently unavailable.") from exc
+
+    async def __aexit__(self, exc_type, exc, traceback) -> bool | None:
+        try:
+            return await self._client.__aexit__(exc_type, exc, traceback)
+        except Exception as close_exc:
+            if exc is not None:
+                # A failure while closing must not hide the error that ended the session.
+                return False
+
+            logger.error("MCP connection closed with an error", url=MCP_SERVER_URL, error=repr(close_exc))
+            raise ExternalServiceError("MCP service is currently unavailable.") from close_exc
+
+
+def create_mcp_client() -> MCPConnection:
+    """Create an MCP client for the Aurelia MCP server, used as "async with create_mcp_client() as client"."""
+    return MCPConnection(Client(MCP_SERVER_URL))
 
 
 async def call_mcp_tool(client: Client, tool_name: str, arguments: dict[str, object]) -> str:

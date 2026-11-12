@@ -14,7 +14,7 @@ from src.rag.rag_service import RAGService
 from src.tools.machine_tools import get_machine_tool
 from src.tools.ticket_tools import get_machine_ticket_tool
 from src.services.maintenance_service import calculate_maintenance_status
-from src.services.exceptions import DatabaseError, LLMError, AuthorizationError
+from src.services.exceptions import DatabaseError, ExternalServiceError, LLMError, AuthorizationError
 from src.database.models import Customer
 from src.agent.action_preparation import prepare_action
 from src.agent.human_approval import request_human_approval
@@ -34,7 +34,8 @@ def retrieve_context(state: AgentState, rag_service: RAGService) -> AgentState:
     
     try:
         context = rag_service.retrieve_context(state["user_query"])
-    except DatabaseError:
+    except (DatabaseError, ExternalServiceError):
+        # Answer without documentation rather than failing the whole chat request.
         logger.exception("RAG retrieval unavailable")
         return {
             **state,
