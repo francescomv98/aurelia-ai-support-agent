@@ -492,7 +492,18 @@ curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" http://localhost:8000/admin
 
 The manifest is written first, because it is the source of truth. If re-indexing then fails (database or OpenAI unavailable), the endpoint returns `503` saying the review was saved. Retry the review, or run `python -m scripts.ingest_documents`. The new chunks are stored before the old ones are deleted, so the document stays searchable throughout.
 
-With Docker Compose, `data/documents` is mounted into the `api` container so that recorded reviews survive a rebuild. On Linux, the container's `app` user must be able to write to that folder. Reviews are serialized within one API process. Running several API replicas would need shared storage for the manifest instead of a local file.
+With Docker Compose, `data/documents` is mounted into the `api` container so that recorded reviews survive a rebuild. The container runs as its own `app` user, so the API must be allowed to write there:
+
+- **Windows and macOS (Docker Desktop):** nothing to do.
+- **Linux:** the mounted folder belongs to your host user, and without write access a review returns `500`. Run this once from the repository root:
+
+  ```bash
+  chmod a+w data/documents data/documents/metadata.json
+  ```
+
+  The API saves the manifest by writing a new file and renaming it. After the first review, `metadata.json` therefore belongs to the container user. If you later need to edit it by hand, use `sudo`, or run `sudo chown $USER data/documents/metadata.json` first.
+
+Reviews are serialized within one API process. Running several API replicas would need shared storage for the manifest instead of a local file.
 
 ## Running the Application Locally
 
@@ -526,11 +537,27 @@ Keep the database and MCP server running while executing application workflows t
 
 Make sure `.env` contains the required PostgreSQL password and the other environment variables needed by the application.
 
+On Linux, first allow the API container to write the document manifest (see [Document reviews](#document-reviews)):
+
+```bash
+chmod a+w data/documents data/documents/metadata.json
+```
+
 Build and start the configured services:
 
 ```bash
 docker compose up -d --build
 ```
+
+On the first start the database is empty. Create the tables, load the sample data and demo users, and ingest the documents. The scripts run inside the `api` container, which already has the database connection and the OpenAI key:
+
+```bash
+docker compose exec api python -m scripts.init_database
+docker compose exec api python -m scripts.seed_database
+docker compose exec api python -m scripts.ingest_documents
+```
+
+The data is kept in the `postgres_data` volume, so these commands are only needed again after `docker compose down -v`, or `ingest_documents` after the documents change. Then log in with one of the [demo users](#demo-users).
 
 Inspect service status:
 
