@@ -125,3 +125,22 @@ def test_replace_document_keeps_old_chunks_when_adding_fails(monkeypatch) -> Non
         vector_store.replace_document("doc-1", [Document(page_content="new chunk")])
 
     assert deleted == []
+
+
+def test_similarity_search_reports_embedding_failure_as_external_service_error(monkeypatch) -> None:
+    import httpx
+    import openai
+    import pytest
+    from src.services.exceptions import ExternalServiceError
+
+    monkeypatch.setattr("src.rag.vector_store.PGVector", FakePGVector)
+
+    vector_store = VectorStore(connection="test-connection", embeddings=object())
+
+    def failing_search(query, k, filter=None):
+        raise openai.APITimeoutError(request=httpx.Request("POST", "https://api.openai.com/v1/embeddings"))
+
+    monkeypatch.setattr(vector_store.store, "similarity_search", failing_search)
+
+    with pytest.raises(ExternalServiceError):
+        vector_store.similarity_search(query="warranty")

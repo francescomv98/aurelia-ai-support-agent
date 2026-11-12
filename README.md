@@ -123,6 +123,19 @@ Located in `src/llm/`.
 
 The application integrates OpenAI models for language generation and embeddings. Model settings, request timeouts and retry behavior are configurable through environment variables.
 
+#### Handling of temporary failures
+
+`POST /chat` depends on OpenAI, PostgreSQL and the MCP server. Each is handled as follows:
+
+| Dependency | Timeout and retries | If it is still unavailable |
+|---|---|---|
+| OpenAI chat model (routing and answer) | `OPENAI_TIMEOUT_SECONDS` (default 30). The OpenAI SDK retries rate limits, 5xx responses, timeouts and connection errors up to `OPENAI_MAX_RETRIES` times (default 2), with exponential backoff | `503`, "The AI service is temporarily unavailable." |
+| OpenAI embeddings (RAG query) | Same settings as the chat model | The agent answers without documentation instead of failing the request |
+| PostgreSQL vector store | Stale connections are detected (`pool_pre_ping`) | The agent answers without documentation |
+| MCP server (orders, shipments, machines, tickets) | No automatic retry | `503`, "An external service is temporarily unavailable." This includes an unreachable server |
+
+MCP calls are deliberately not retried. Write tools (create or cancel an order, create or update a ticket) are not idempotent: if the server completed the action but the response was lost, a retry would repeat it, for example by creating a second order. Read tools could be retried safely, but this is not implemented yet.
+
 ### Database Layer
 
 Located in `src/database/`.
@@ -362,8 +375,8 @@ Configure the following variables:
 | `POSTGRES_PASSWORD` | PostgreSQL password used by Docker Compose |
 | `OPENAI_API_KEY` | API key for OpenAI model and embedding calls |
 | `OPENAI_MODEL` | OpenAI chat model; defaults to `gpt-4o-mini` |
-| `OPENAI_TIMEOUT_SECONDS` | Request timeout for OpenAI calls |
-| `OPENAI_MAX_RETRIES` | Maximum number of retries for OpenAI calls |
+| `OPENAI_TIMEOUT_SECONDS` | Request timeout for OpenAI chat and embedding calls; defaults to `30` |
+| `OPENAI_MAX_RETRIES` | Maximum number of retries, with exponential backoff, for OpenAI chat and embedding calls; defaults to `2` |
 | `RATE_LIMIT_REQUESTS` | Maximum number of requests allowed in the configured time window |
 | `RATE_LIMIT_WINDOW_SECONDS` | Rate-limiting window in seconds |
 | `JWT_SECRET_KEY` | Secret used for JWT signing |

@@ -1,10 +1,11 @@
 from typing import Any
+import openai
 from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
 from langchain_postgres import PGVector
 from src.app_logging.logger import logger
 from sqlalchemy.exc import SQLAlchemyError
-from src.services.exceptions import DatabaseError
+from src.services.exceptions import DatabaseError, ExternalServiceError
 
 class VectorStore:
     """Manage the PostgreSQL vector store."""
@@ -93,6 +94,10 @@ class VectorStore:
         except SQLAlchemyError as exc:
             logger.exception("Vector similarity search failed")
             raise DatabaseError("Vector store operation failed.") from exc
+        except openai.APIError as exc:
+            # The query is embedded by OpenAI before the search; the SDK has already retried.
+            logger.exception("Query embedding failed")
+            raise ExternalServiceError("The embedding service is unavailable.") from exc
         except Exception:
             logger.exception("Vector similarity search failed")
             raise
