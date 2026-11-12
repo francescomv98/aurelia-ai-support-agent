@@ -1,22 +1,9 @@
 from bisect import bisect_right
 from itertools import groupby
-from pathlib import Path
 from src.app_logging.logger import logger
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
-
-ACRONYMS = {"faq": "FAQ"}
-
-
-def document_title(source: str) -> str:
-    """Turn a file name into a readable title: "AIS-100_technical_specifications.pdf" -> "AIS-100 Technical Specifications"."""
-
-    words = Path(source).stem.replace("_", " ").split()
-
-    return " ".join(
-        ACRONYMS.get(word.lower(), word if any(character.isupper() for character in word) else word.capitalize())
-        for word in words
-    )
+from src.rag.document_metadata import document_title
 
 
 class DocumentChunker:
@@ -60,7 +47,8 @@ class DocumentChunker:
         Splitting page by page cuts tables in two at every page break: the
         evaluation found the AIS-100 dimensions heading on one page and its
         values (weight, size) on the next, in chunks that never met. Each chunk
-        keeps the metadata of the page it starts on.
+        keeps the metadata of the page it starts on, plus its position in the
+        file (chunk_index, from 0).
         """
 
         header = self._header(pages[0])
@@ -76,12 +64,12 @@ class DocumentChunker:
         merged = Document(page_content="\n".join(texts), metadata=dict(pages[0].metadata))
         chunks: list[Document] = []
 
-        for chunk in self._splitter(self.chunk_size - len(header)).split_documents([merged]):
+        for chunk_index, chunk in enumerate(self._splitter(self.chunk_size - len(header)).split_documents([merged])):
             start = chunk.metadata.pop("start_index")
             # The splitter reports -1 when it cannot locate the chunk; fall back to the first page.
             start_page = pages[max(bisect_right(page_starts, start) - 1, 0)]
 
-            chunks.append(Document(page_content=header + chunk.page_content, metadata=dict(start_page.metadata)))
+            chunks.append(Document(page_content=header + chunk.page_content, metadata={**start_page.metadata, "chunk_index": chunk_index}))
 
         return chunks
 

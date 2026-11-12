@@ -24,7 +24,7 @@ pool:
 resources:
   containers:
     - container: postgres
-      image: pgvector/pgvector:pg16
+      image: pgvector/pgvector:pg16-trixie
       ports:
         - 5432:5432
       env:
@@ -45,7 +45,7 @@ stages:
               versionSpec: $(pythonVersion)
 
           - script: |
-              pip install "$(grep '^ruff==' requirements-dev.txt)"
+              pip install "$(grep '^ruff==' requirements.txt)"
               ruff check .
             displayName: Run ruff
 
@@ -59,7 +59,7 @@ stages:
 
           # Fails when a pinned runtime dependency has a known vulnerability.
           - script: |
-              pip install "$(grep '^pip-audit==' requirements-dev.txt)"
+              pip install pip-audit==2.10.1  # audit tool only, not a project dependency
               pip-audit -r requirements.txt --progress-spinner off
             displayName: Audit runtime dependencies
 
@@ -82,12 +82,12 @@ stages:
           - task: Cache@2
             displayName: Cache pip downloads
             inputs:
-              key: 'pip | "$(Agent.OS)" | requirements.txt | requirements-dev.txt'
+              key: 'pip | "$(Agent.OS)" | requirements.txt'
               path: $(PIP_CACHE_DIR)
 
           - script: |
               python -m pip install --upgrade pip
-              pip install -r requirements-dev.txt
+              pip install -r requirements.txt
             displayName: Install dependencies
 
           - script: |

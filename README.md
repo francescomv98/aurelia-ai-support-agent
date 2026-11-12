@@ -93,6 +93,30 @@ The RAG component supports retrieving relevant information from technical docume
 
 Documents are split into chunks of up to 500 characters with a 100-character overlap. The pages of each PDF are chunked as one continuous text, so a table that crosses a page break stays together, and each chunk keeps the number of the page it starts on. Each chunk also starts with its document's title, for example `[AIS-100 Technical Specifications]`, so that chunks such as specification tables are linked to the product they describe. These settings were chosen with the RAG evaluation below. After changing them, re-run `python -m scripts.ingest_documents`.
 
+Every chunk carries this metadata (built in `src/rag/document_metadata.py`):
+
+| Field | Example | Origin |
+|---|---|---|
+| `document_id` | `5d3ce3c9-21d8-580b-8705-a3bc8ca4e705` | UUID v5 of the file name: stable across ingestions, new if the file is renamed |
+| `source`, `category` | `AIS-500_user_manual.pdf`, `manuals` | File name and folder |
+| `page`, `total_pages` | `1`, `9` | PDF page (0-based) and page count |
+| `product` | `AIS-500` (`null` for general documents) | File name prefix |
+| `doc_type` | `user_manual` | File name without the product |
+| `title` | `AIS-500 User Manual` | File name |
+| `chunk_index` | `3` | Position of the chunk in its file, from 0 |
+| `date` | `2026-01-15` | Effective date, from the owner manifest |
+| `valid` | `true` | Owner manifest; `false` withdraws the document |
+| `reviewed_at` | `2026-11-12T10:00:00+00:00` or `null` | Time of the last owner review (UTC), from the owner manifest |
+
+Other fields extracted from the PDF (producer, creator, author, PDF timestamps) are dropped.
+
+Retrieval (`src/rag/retriever.py`) uses this metadata to filter the vector search:
+
+- Only chunks with `valid: true` are searched.
+- When the question names a product (`AIS-200`, `AIS 200`, `ais200`), the search is limited to the chunks of that product and the general documents (`product: null`, such as the FAQ, maintenance guides and policies). The manuals and specifications of the three models are very similar, so without this filter chunks about the other models can push out the right ones. A question that names several products keeps all of them.
+
+Each retrieved chunk is passed to the LLM with a header such as `[Source: AIS-200 User Manual (AIS-200_user_manual.pdf) | Page: 4 | Category: manuals | Product: AIS-200 | Effective date: 2026-01-15 | Last reviewed: never]`. Pages are numbered from 1, as in the PDF viewer.
+
 ### LLM Integration
 
 Located in `src/llm/`.
@@ -150,6 +174,8 @@ The application includes JWT-based authentication, authorization controls, reque
 
 The chat endpoints serve customers only. `SUPPORT_AGENT` and `ADMIN` users receive `403 Forbidden` from `/chat` and `/chat/resume`, and every agent operation runs for the authenticated customer's own `customer_id`.
 
+The document review endpoints (`/admin/documents/...`, see [Document reviews](#document-reviews)) are for `ADMIN` users only; any other role receives `403 Forbidden`.
+
 ### Logging and Observability
 
 Located in `src/app_logging/`.
@@ -197,6 +223,7 @@ Run all stages, or one stage, from the repository root:
 python -m scripts.evaluate_rag
 python -m scripts.evaluate_rag --stage ingestion --check-store
 python -m scripts.evaluate_rag --stage retrieval --top-k 4
+python -m scripts.evaluate_rag --stage retrieval --no-product-filter   # baseline without the product filter
 python -m scripts.evaluate_rag --check-store --output data/evaluation/rag/rag_report.json
 ```
 
@@ -216,10 +243,12 @@ Each stage prints its checks with thresholds, and the script exits with a non-ze
 | Vector search | pgvector |
 | Tool integration | Model Context Protocol (MCP) |
 | Authentication | JWT |
-| Testing | pytest, pytest-asyncio |
+| Testing | pytest, pytest-asyncio, pytest-cov |
+| Code quality | ruff, pip-audit |
 | Observability | Structured logging, LangSmith |
 | Containerization | Docker, Docker Compose |
-| CI | GitHub Actions |
+| CI | GitHub Actions, Azure Pipelines |
+| CD | GitHub Actions, GitHub Container Registry |
 
 ## Project Structure
 
@@ -227,11 +256,13 @@ Each stage prints its checks with thresholds, and the script exits with a non-ze
 aurelia-ai-support-agent/
 ├── .github/
 │   └── workflows/
+│       ├── cd.yml
 │       └── ci.yml
 ├── data/
 │   ├── documents/
 │   └── evaluation/
 ├── scripts/
+│   ├── evaluate_rag.py
 │   ├── ingest_documents.py
 │   ├── init_database.py
 │   ├── run_evaluation.py
@@ -256,11 +287,13 @@ aurelia-ai-support-agent/
 ├── .dockerignore
 ├── .env.example
 ├── .gitignore
+├── azure-pipelines.yml
 ├── Dockerfile
 ├── docker-compose.yaml
 ├── main.py
 ├── pytest.ini
 ├── requirements.txt
+├── ruff.toml
 └── README.md
 ```
 
@@ -303,11 +336,17 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-For development (tests, lint and dependency audit), install the dev requirements instead:
+`requirements.txt` is the only requirements file. It lists the project's direct dependencies, pinned, and pip resolves their transitive dependencies. It includes the test and lint tools (`pytest`, `pytest-asyncio`, `pytest-cov`, `httpx` for the FastAPI test client, `ruff`), so one install is enough to run the application and the test suite:
 
 ```bash
-pip install -r requirements-dev.txt
 ruff check .
+python -m pytest tests/unit tests/evaluation
+```
+
+The dependency audit tool is not a project dependency. Install it separately when you need it, as CI does:
+
+```bash
+pip install pip-audit==2.10.1
 pip-audit -r requirements.txt
 ```
 
@@ -357,6 +396,34 @@ Seed the database with the sample data:
 python -m scripts.seed_database
 ```
 
+### Demo users
+
+The seed script creates these users. **All of them have the same password: `AureliaDemo123!`** You can set a different one with the `AURELIA_DEMO_PASSWORD` environment variable before seeding. Re-running the seed script resets every demo user to that password.
+
+| Username | Password | Role | Customer |
+|---|---|---|---|
+| `alfa.support` | `AureliaDemo123!` | `CUSTOMER` | CUST-001, Alfa Manufacturing S.p.A. |
+| `beta.operations` | `AureliaDemo123!` | `CUSTOMER` | CUST-002, Beta Automation GmbH |
+| `gamma.manager` | `AureliaDemo123!` | `CUSTOMER` | CUST-003, Gamma Industries S.r.l. |
+| `delta.maintenance` | `AureliaDemo123!` | `CUSTOMER` | CUST-004, Delta Mechanics S.A. |
+| `nova.operator` | `AureliaDemo123!` | `CUSTOMER` | CUST-005, Nova Production Ltd. |
+| `mario.rossi` | `AureliaDemo123!` | `SUPPORT_AGENT` | — |
+| `lucia.bianchi` | `AureliaDemo123!` | `SUPPORT_AGENT` | — |
+| `admin.system` | `AureliaDemo123!` | `ADMIN` | — |
+
+What each role can do:
+- **Customers** can use `/chat` and `/chat/resume`.
+- **`admin.system`** can use the document review endpoints (`/admin/documents/...`).
+- **Support agents** can log in, but no endpoint is open to them yet.
+
+Get a token with:
+
+```bash
+curl -X POST http://localhost:8000/auth/login -H "Content-Type: application/json"      -d '{"username": "alfa.support", "password": "AureliaDemo123!"}'
+```
+
+These are development-only credentials for the sample data. Never seed them into a shared or production database.
+
 Ensure the database is available and that `DATABASE_URL` matches the database credentials and connection settings before starting the application.
 
 ## Document Ingestion
@@ -380,6 +447,40 @@ python -m scripts.ingest_documents
 
 Run this script to populate the vector store before testing workflows that rely on document retrieval.
 
+### Document owner metadata
+
+`data/documents/metadata.json` lets document owners manage each PDF without changing code:
+
+```json
+{
+  "warranty_policy.pdf": {"date": "2026-01-01", "valid": true, "reviewed_at": "2026-06-01"}
+}
+```
+
+- **`date`:** effective date (ISO `YYYY-MM-DD`). A test checks that it matches the "Effective Date" printed on the PDF's first page.
+- **`valid`:** set it to `false` to withdraw a document. Retrieval only searches chunks with `valid: true`.
+- **`reviewed_at`:** time of the last review (ISO date or timestamp; a plain date means midnight UTC), or `null` if the document was never reviewed. Normally set through the review API below.
+
+Ingestion stops on a malformed entry (wrong date format, unknown field) or on an entry for a file that does not exist. A PDF without an entry is ingested with `valid: true` and empty dates, with a warning. After editing the manifest, re-run `python -m scripts.ingest_documents`: metadata is stored with the chunks, and `python -m scripts.evaluate_rag --stage ingestion --check-store` reports a store whose text or metadata is out of date.
+
+### Document reviews
+
+Every valid document should be reviewed at least once a year. Two endpoints, restricted to `ADMIN` users, support this:
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /admin/documents/review-due?days=365` | Lists the valid documents whose last review is more than `days` days old (default 365). A document never reviewed counts from its effective `date`; one with neither date is always listed. Withdrawn documents (`valid: false`) are skipped. Most overdue first, each with its `document_id`. |
+| `POST /admin/documents/{document_id}/review` | Records a review now: sets `reviewed_at` to the current UTC time in `metadata.json`, then re-ingests **only that document** (its chunks are re-embedded and replace the old ones in the vector store). Returns the document and its new chunk count. Unknown id: `404`. |
+
+```bash
+curl -H "Authorization: Bearer $ADMIN_TOKEN" http://localhost:8000/admin/documents/review-due
+curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" http://localhost:8000/admin/documents/5d3ce3c9-21d8-580b-8705-a3bc8ca4e705/review
+```
+
+The manifest is written first, because it is the source of truth. If re-indexing then fails (database or OpenAI unavailable), the endpoint returns `503` saying the review was saved. Retry the review, or run `python -m scripts.ingest_documents`. The new chunks are stored before the old ones are deleted, so the document stays searchable throughout.
+
+With Docker Compose, `data/documents` is mounted into the `api` container so that recorded reviews survive a rebuild. On Linux, the container's `app` user must be able to write to that folder. Reviews are serialized within one API process. Running several API replicas would need shared storage for the manifest instead of a local file.
+
 ## Running the Application Locally
 
 Start the MCP server in a separate terminal:
@@ -399,6 +500,8 @@ uvicorn main:app --reload
 The API documentation is available at:
 
 [http://localhost:8000/docs](http://localhost:8000/docs)
+
+A liveness endpoint, used by the Docker Compose health check and the CI smoke test, is available at `http://localhost:8000/health` and returns `{"status": "ok"}`.
 
 The MCP client is configured for the local MCP endpoint:
 
@@ -463,6 +566,14 @@ python -m pytest tests/evaluation -v
 ```
 
 Integration and evaluation tests may require a configured database, initialized sample data, or other services depending on the individual test.
+
+Run the suites with a coverage report, as CI does:
+
+```bash
+python -m pytest tests/unit tests/evaluation --cov=src --cov-report=term-missing
+```
+
+`pytest.ini` adds the project root to the import path (`pythonpath = .`), so the plain `pytest` command works as well as `python -m pytest`.
 
 ## Continuous Integration and Delivery
 

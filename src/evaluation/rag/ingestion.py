@@ -2,15 +2,17 @@
 
 Runs offline on the same loader and chunker that scripts/ingest_documents.py
 uses, so it needs no API key. The optional vector-store check compares the
-chunks with what is actually stored in the database.
+chunks (text and metadata) with what is actually stored in the database.
 """
 
+import json
 from pathlib import Path
 from typing import Any
 from langchain_core.documents import Document
 from src.evaluation.rag.common import Check, StageReport, contains_phrase, ratio
 
-REQUIRED_METADATA = ("source", "category", "page")
+# product, date and reviewed_at may legitimately be empty (general documents, never reviewed).
+REQUIRED_METADATA = ("document_id", "source", "category", "page", "doc_type", "title", "chunk_index", "valid")
 MIN_CHUNK_CHARS = 50
 
 
@@ -39,20 +41,26 @@ def evaluate_ingestion_case(case: dict[str, Any], chunks: list[Document]) -> dic
     }
 
 
-def vector_store_check(stored_texts: list[str], chunks: list[Document]) -> Check:
+def _chunk_key(chunk: Document) -> tuple[str, str]:
+    return chunk.page_content, json.dumps(chunk.metadata, sort_keys=True, default=str)
+
+
+def vector_store_check(stored_chunks: list[Document], chunks: list[Document]) -> Check:
     """Check that the vector store holds exactly the chunks the current ingestion code produces.
 
-    A store left over from an older chunker still answers queries, so without
-    this check the retrieval metrics silently measure an out-of-date index.
+    Text and metadata are both compared. A store left over from an older
+    chunker still answers queries, and one with outdated metadata ignores a
+    document an owner has just invalidated, so without this check the
+    retrieval metrics silently measure an out-of-date index.
     """
 
-    expected = sorted(chunk.page_content for chunk in chunks)
-    stored = sorted(stored_texts)
+    expected = sorted(_chunk_key(chunk) for chunk in chunks)
+    stored = sorted(_chunk_key(chunk) for chunk in stored_chunks)
     matches = stored == expected
 
     details = [] if matches else [
         f"vector store holds {len(stored)} chunks, current ingestion produces {len(expected)}; "
-        f"{len(set(expected) - set(stored))} current chunks are missing from the store. "
+        f"{len(set(expected) - set(stored))} current chunks are missing from the store or have different metadata. "
         "Re-run: python -m scripts.ingest_documents"
     ]
 
@@ -60,7 +68,7 @@ def vector_store_check(stored_texts: list[str], chunks: list[Document]) -> Check
 
 
 def evaluate_ingestion(pdf_files: list[Path], documents: list[Document], chunks: list[Document], cases: list[dict[str, Any]],
-                       chunk_size: int, stored_texts: list[str] | None = None) -> StageReport:
+                       chunk_size: int, stored_chunks: list[Document] | None = None) -> StageReport:
     """Evaluate loading, chunking and (optionally) storage of the knowledge base."""
 
     loaded_sources = {document.metadata.get("source") for document in documents}
@@ -102,7 +110,7 @@ def evaluate_ingestion(pdf_files: list[Path], documents: list[Document], chunks:
         Check("fact_coverage", ratio(sum(result["passed"] for result in case_results), len(case_results)), 1.0, details=missing_facts)
     ]
 
-    if stored_texts is not None:
-        checks.append(vector_store_check(stored_texts, chunks))
+    if stored_chunks is not None:
+        checks.append(vector_store_check(stored_chunks, chunks))
 
     return StageReport(stage="ingestion", checks=checks, cases=case_results)

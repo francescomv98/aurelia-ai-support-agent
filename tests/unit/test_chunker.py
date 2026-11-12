@@ -127,3 +127,27 @@ def test_different_files_are_never_merged() -> None:
     chunks = DocumentChunker().split(documents)
 
     assert [chunk.metadata["source"] for chunk in chunks] == ["warranty_policy.pdf", "customer_faq.pdf"]
+
+
+def test_chunk_index_counts_from_zero_within_each_file() -> None:
+    documents = [
+        Document(page_content=f"Warranty sentence {number}. " * 20, metadata={"source": "warranty_policy.pdf", "page": number}) for number in range(2)
+    ] + [
+        Document(page_content="FAQ sentence. " * 20, metadata={"source": "customer_faq.pdf", "page": 0})
+    ]
+
+    chunks = DocumentChunker(chunk_size=200, chunk_overlap=20).split(documents)
+
+    for source in ("warranty_policy.pdf", "customer_faq.pdf"):
+        indexes = [chunk.metadata["chunk_index"] for chunk in chunks if chunk.metadata["source"] == source]
+        assert indexes == list(range(len(indexes)))
+
+
+def test_chunks_carry_the_page_metadata() -> None:
+    page = Document(page_content="Content. " * 10, metadata={"source": "AIS-500_user_manual.pdf", "page": 0, "product": "AIS-500", "valid": False})
+
+    [chunk] = DocumentChunker().split([page])
+
+    assert chunk.metadata["product"] == "AIS-500"
+    assert chunk.metadata["valid"] is False
+    assert chunk.metadata["chunk_index"] == 0
