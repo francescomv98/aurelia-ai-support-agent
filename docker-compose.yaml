@@ -1,7 +1,9 @@
 
 services:
   postgres:
-    image: pgvector/pgvector:pg16
+    # Pin the Debian variant too: the plain "pg16" tag has switched between bookworm and trixie,
+    # and each has a different glibc collation version, which triggers a collation mismatch on existing data.
+    image: pgvector/pgvector:pg16-trixie
     container_name: aurelia-postgres
     restart: unless-stopped
     environment:
@@ -49,6 +51,10 @@ services:
       MCP_SERVER_URL: http://mcp:8001/mcp
     env_file:
       - .env
+    volumes:
+      # The admin review API writes reviewed_at to data/documents/metadata.json:
+      # without this mount every recorded review is lost when the container is recreated.
+      - ./data/documents:/app/data/documents
     ports:
       - "8000:8000"
     depends_on:
@@ -57,7 +63,7 @@ services:
       mcp:
         condition: service_started
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/docs', timeout=5)"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3

@@ -6,6 +6,7 @@ Usage, from the repository root:
     python -m scripts.evaluate_rag --stage ingestion     # offline, no API key needed
     python -m scripts.evaluate_rag --stage ingestion --check-store
     python -m scripts.evaluate_rag --stage retrieval --top-k 4
+    python -m scripts.evaluate_rag --stage retrieval --no-product-filter   # baseline for comparison
     python -m scripts.evaluate_rag --stage generation
     python -m scripts.evaluate_rag --output data/evaluation/rag/rag_report.json
 
@@ -55,21 +56,23 @@ def load_knowledge_base(chunker: DocumentChunker) -> tuple[list[Path], list[Docu
     return pdf_files, documents, chunks
 
 
-def load_stored_chunk_texts(database_url: str) -> list[str]:
-    """Return the text of every chunk stored in the PGVector collection."""
+def load_stored_chunks(database_url: str) -> list[Document]:
+    """Return every chunk (text and metadata) stored in the PGVector collection."""
 
     engine = create_engine(database_url)
 
     try:
         with engine.connect() as connection:
-            return list(connection.execute(
+            rows = connection.execute(
                 text(
-                    "SELECT e.document FROM langchain_pg_embedding e "
+                    "SELECT e.document, e.cmetadata FROM langchain_pg_embedding e "
                     "JOIN langchain_pg_collection c ON e.collection_id = c.uuid "
                     "WHERE c.name = :name"
                 ),
                 {"name": COLLECTION_NAME}
-            ).scalars())
+            )
+
+            return [Document(page_content=document, metadata=metadata or {}) for document, metadata in rows]
     finally:
         engine.dispose()
 
@@ -87,26 +90,26 @@ def run_ingestion(check_store: bool) -> StageReport:
     chunker = DocumentChunker()
     pdf_files, documents, chunks = load_knowledge_base(chunker)
 
-    stored_texts = load_stored_chunk_texts(require_env("DATABASE_URL")) if check_store else None
+    stored_chunks = load_stored_chunks(require_env("DATABASE_URL")) if check_store else None
 
     return evaluate_ingestion(pdf_files=pdf_files, documents=documents, chunks=chunks, cases=load_cases("ingestion"),
-                              chunk_size=chunker.chunk_size, stored_texts=stored_texts)
+                              chunk_size=chunker.chunk_size, stored_chunks=stored_chunks)
 
 
-def run_retrieval(top_k: int) -> StageReport:
+def run_retrieval(top_k: int, product_filter: bool = True) -> StageReport:
     from src.rag.embedding import create_embeddings
     from src.rag.retriever import Retriever
     from src.rag.vector_store import VectorStore
 
     database_url = require_env("DATABASE_URL")
     vector_store = VectorStore(connection=database_url, embeddings=create_embeddings(), collection_name=COLLECTION_NAME)
-    retriever = Retriever(vector_store=vector_store, top_k=top_k)
+    retriever = Retriever(vector_store=vector_store, top_k=top_k, product_filter=product_filter)
 
     report = evaluate_retrieval(cases=load_cases("retrieval"), retrieve=retriever.retrieve)
 
     # Metrics from an out-of-date index describe the old chunker, not the current code.
     _, _, chunks = load_knowledge_base(DocumentChunker())
-    report.checks.insert(0, vector_store_check(load_stored_chunk_texts(database_url), chunks))
+    report.checks.insert(0, vector_store_check(load_stored_chunks(database_url), chunks))
 
     return report
 
@@ -172,7 +175,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Evaluate the RAG pipeline stage by stage.")
     parser.add_argument("--stage", choices=(*STAGES, "all"), default="all")
     parser.add_argument("--top-k", type=int, default=4, help="Chunks retrieved per question (the agent uses 4).")
-    parser.add_argument("--check-store", action="store_true", help="Also compare the chunk count with the vector store.")
+    parser.add_argument("--no-product-filter", action="store_true",
+                        help="Disable the product filter in retrieval, to compare the metrics with and without it.")
+    parser.add_argument("--check-store", action="store_true", help="Also compare the chunks (text and metadata) with the vector store.")
     parser.add_argument("--output", type=Path, help="Write the full report, including every answer, to a JSON file.")
     args = parser.parse_args()
 
@@ -186,7 +191,7 @@ def main() -> int:
     stages = STAGES if args.stage == "all" else (args.stage,)
     runners = {
         "ingestion": lambda: run_ingestion(args.check_store),
-        "retrieval": lambda: run_retrieval(args.top_k),
+        "retrieval": lambda: run_retrieval(args.top_k, product_filter=not args.no_product_filter),
         "generation": run_generation
     }
 

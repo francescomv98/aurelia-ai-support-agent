@@ -6,10 +6,10 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from enum import Enum
 from src.database.models import Machine, SupportTicket, TicketCategory, TicketPriority, TicketStatus
-
-TICKET_NUMBER_ATTEMPTS = 3
 from src.app_logging.logger import logger
 from src.services.exceptions import ValidationError, DatabaseError
+
+TICKET_NUMBER_ATTEMPTS = 3
 
 class CreateSupportTicketResult(BaseModel):
     """Result returned when creating a support ticket."""

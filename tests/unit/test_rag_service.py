@@ -66,3 +66,44 @@ def test_build_context_with_no_documents() -> None:
     context = service.build_context([])
 
     assert context == ""
+
+
+def test_build_context_header_shows_document_metadata() -> None:
+    document = Document(
+        page_content="Maximum speed: 80 units per minute.",
+        metadata={
+            "source": "AIS-200_technical_specifications.pdf",
+            "title": "AIS-200 Technical Specifications",
+            "page": 0,
+            "category": "technical",
+            "product": "AIS-200",
+            "date": "2026-01-20",
+            "reviewed_at": "2026-06-01"
+        }
+    )
+
+    context = RAGService(retriever=FakeRetriever()).build_context([document])
+
+    assert context.splitlines()[0] == (
+        "[Source: AIS-200 Technical Specifications (AIS-200_technical_specifications.pdf) | Page: 1 | "
+        "Category: technical | Product: AIS-200 | Effective date: 2026-01-20 | Last reviewed: 2026-06-01]"
+    )
+
+
+def test_build_context_header_for_general_never_reviewed_document() -> None:
+    document = Document(
+        page_content="Support hours are 08:00-18:00 CET.",
+        metadata={"source": "customer_faq.pdf", "title": "Customer FAQ", "page": 2, "category": "faq",
+                  "product": None, "date": "2026-01-25", "reviewed_at": None}
+    )
+
+    header = RAGService(retriever=FakeRetriever()).build_context([document]).splitlines()[0]
+
+    assert header == ("[Source: Customer FAQ (customer_faq.pdf) | Page: 3 | Category: faq | "
+                      "Effective date: 2026-01-25 | Last reviewed: never]")
+
+
+def test_build_context_header_with_minimal_metadata() -> None:
+    header = RAGService(retriever=FakeRetriever()).build_context([Document(page_content="text", metadata={})]).splitlines()[0]
+
+    assert header == "[Source: unknown | Page: unknown | Category: unknown]"

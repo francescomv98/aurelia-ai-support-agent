@@ -2,14 +2,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from src.database.models import Order, OrderItem, Product
-
-ORDER_NUMBER_ATTEMPTS = 3
 from typing import Literal
 from pydantic import BaseModel
 from src.app_logging.logger import logger
 from decimal import Decimal
 from datetime import datetime, timezone
 from src.services.exceptions import ValidationError, DatabaseError
+
+ORDER_NUMBER_ATTEMPTS = 3
 
 class OrderResult(BaseModel):
     """Result returned by the order service."""
