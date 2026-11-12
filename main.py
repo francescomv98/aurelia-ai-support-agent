@@ -24,7 +24,7 @@ async def lifespan(_: FastAPI):
 app = FastAPI(
     title="Aurelia AI Support Agent",
     description="Enterprise AI support agent for Aurelia Industrial Systems.",
-    version="0.1.0",
+    version="1.0.0",
     lifespan=lifespan
 )
 
