@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from langgraph.checkpoint.memory import InMemorySaver
 from langchain_core.documents import Document
 from langchain_openai import ChatOpenAI
-from src.services.exceptions import AuthorizationError, LLMError, DatabaseError
+from src.services.exceptions import AuthorizationError, LLMError, DatabaseError, ExternalServiceError
 from src.agent.action_preparation import CreateOrderAction, OrderItem
 from src.agent.state import PendingAction
 import openai
@@ -900,3 +900,15 @@ async def test_execute_write_tool_uses_mcp_for_create_support_ticket() -> None:
             "machine_serial": "AIS2-2025-00142"
         }
     )
+
+@pytest.mark.parametrize("error", [DatabaseError("Vector store operation failed."), ExternalServiceError("The embedding service is unavailable.")])
+def test_retrieve_context_continues_without_documentation_when_retrieval_fails(error: Exception) -> None:
+    from src.agent.graph import retrieve_context
+
+    rag_service = MagicMock(spec=RAGService)
+    rag_service.retrieve_context.side_effect = error
+
+    state = retrieve_context({"user_query": "What is the warranty period?", "retrieved_context": []}, rag_service)
+
+    assert state["retrieved_context"] == []
+    assert state["rag_available"] is False

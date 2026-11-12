@@ -1,6 +1,7 @@
 from src.database.base import Base
 from src.database.session import engine
-from src.database.models import (Customer, MaintenanceRecord, Machine, Order, OrderItem, Product, Role, Shipment, SupportTicket, User)
+# Imported for their side effect: each model registers its table on Base.metadata.
+from src.database.models import (Customer, MaintenanceRecord, Machine, Order, OrderItem, Product, Role, Shipment, SupportTicket, User)  # noqa: F401
 from src.app_logging.logger import configure_logging, logger
 
 def main() -> None:

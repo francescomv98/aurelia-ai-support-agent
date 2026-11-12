@@ -31,6 +31,36 @@ class RAGService:
             raise
 
 
+    @staticmethod
+    def _header(metadata: dict) -> str:
+        """Describe a chunk's origin: "[Source: AIS-200 User Manual (AIS-200_user_manual.pdf) | Page: 3 | ...]".
+
+        Pages are shown from 1 (PyPDF counts from 0) so they match what the
+        customer sees in the PDF. Dates let the model tell how current a
+        document is; fields missing from older chunks are left out.
+        """
+
+        source = metadata.get("source", "unknown")
+        title = metadata.get("title")
+        page = metadata.get("page")
+
+        parts = [
+            f"Source: {title} ({source})" if title else f"Source: {source}",
+            f"Page: {page + 1}" if isinstance(page, int) else "Page: unknown",
+            f"Category: {metadata.get('category', 'unknown')}"
+        ]
+
+        if metadata.get("product"):
+            parts.append(f"Product: {metadata['product']}")
+
+        if metadata.get("date"):
+            parts.append(f"Effective date: {metadata['date']}")
+
+        if "reviewed_at" in metadata:
+            parts.append(f"Last reviewed: {metadata['reviewed_at'] or 'never'}")
+
+        return f"[{' | '.join(parts)}]"
+
     def build_context(self, documents: list[Document]) -> str:
         """Build a textual context from retrieved documents."""
 
@@ -41,14 +71,7 @@ class RAGService:
         context_parts: list[str] = []
 
         for document in documents:
-            source = document.metadata.get("source", "unknown")
-            page = document.metadata.get("page", "unknown")
-            category = document.metadata.get("category", "unknown")
-
-            context_parts.append(
-                f"[Source: {source} | Page: {page} | Category: {category}]\n"
-                f"{document.page_content}"
-            )
+            context_parts.append(f"{self._header(document.metadata)}\n{document.page_content}")
 
         context = "\n\n".join(context_parts)
 

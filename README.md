@@ -26,7 +26,7 @@ The project demonstrates how to build an AI agent that integrates technical docu
 - Unit, integration and evaluation tests
 - Docker and Docker Compose support
 - GitHub Actions continuous integration
-- Automated Docker image build
+- Continuous delivery of Docker images to GitHub Container Registry
 - LangSmith tracing configuration
 
 ## Architecture
@@ -93,11 +93,48 @@ The RAG component supports retrieving relevant information from technical docume
 
 Documents are split into chunks of up to 500 characters with a 100-character overlap. The pages of each PDF are chunked as one continuous text, so a table that crosses a page break stays together, and each chunk keeps the number of the page it starts on. Each chunk also starts with its document's title, for example `[AIS-100 Technical Specifications]`, so that chunks such as specification tables are linked to the product they describe. These settings were chosen with the RAG evaluation below. After changing them, re-run `python -m scripts.ingest_documents`.
 
+Every chunk carries this metadata (built in `src/rag/document_metadata.py`):
+
+| Field | Example | Origin |
+|---|---|---|
+| `document_id` | `5d3ce3c9-21d8-580b-8705-a3bc8ca4e705` | UUID v5 of the file name: stable across ingestions, new if the file is renamed |
+| `source`, `category` | `AIS-500_user_manual.pdf`, `manuals` | File name and folder |
+| `page`, `total_pages` | `1`, `9` | PDF page (0-based) and page count |
+| `product` | `AIS-500` (`null` for general documents) | File name prefix |
+| `doc_type` | `user_manual` | File name without the product |
+| `title` | `AIS-500 User Manual` | File name |
+| `chunk_index` | `3` | Position of the chunk in its file, from 0 |
+| `date` | `2026-01-15` | Effective date, from the owner manifest |
+| `valid` | `true` | Owner manifest; `false` withdraws the document |
+| `reviewed_at` | `2026-11-12T10:00:00+00:00` or `null` | Time of the last owner review (UTC), from the owner manifest |
+
+Other fields extracted from the PDF (producer, creator, author, PDF timestamps) are dropped.
+
+Retrieval (`src/rag/retriever.py`) uses this metadata to filter the vector search:
+
+- Only chunks with `valid: true` are searched.
+- When the question names a product (`AIS-200`, `AIS 200`, `ais200`), the search is limited to the chunks of that product and the general documents (`product: null`, such as the FAQ, maintenance guides and policies). The manuals and specifications of the three models are very similar, so without this filter chunks about the other models can push out the right ones. A question that names several products keeps all of them.
+
+Each retrieved chunk is passed to the LLM with a header such as `[Source: AIS-200 User Manual (AIS-200_user_manual.pdf) | Page: 4 | Category: manuals | Product: AIS-200 | Effective date: 2026-01-15 | Last reviewed: never]`. Pages are numbered from 1, as in the PDF viewer.
+
 ### LLM Integration
 
 Located in `src/llm/`.
 
 The application integrates OpenAI models for language generation and embeddings. Model settings, request timeouts and retry behavior are configurable through environment variables.
+
+#### Handling of temporary failures
+
+`POST /chat` depends on OpenAI, PostgreSQL and the MCP server. Each is handled as follows:
+
+| Dependency | Timeout and retries | If it is still unavailable |
+|---|---|---|
+| OpenAI chat model (routing and answer) | `OPENAI_TIMEOUT_SECONDS` (default 30). The OpenAI SDK retries rate limits, 5xx responses, timeouts and connection errors up to `OPENAI_MAX_RETRIES` times (default 2), with exponential backoff | `503`, "The AI service is temporarily unavailable." |
+| OpenAI embeddings (RAG query) | Same settings as the chat model | The agent answers without documentation instead of failing the request |
+| PostgreSQL vector store | Stale connections are detected (`pool_pre_ping`) | The agent answers without documentation |
+| MCP server (orders, shipments, machines, tickets) | No automatic retry | `503`, "An external service is temporarily unavailable." This includes an unreachable server |
+
+MCP calls are deliberately not retried. Write tools (create or cancel an order, create or update a ticket) are not idempotent: if the server completed the action but the response was lost, a retry would repeat it, for example by creating a second order. Read tools could be retried safely, but this is not implemented yet.
 
 ### Database Layer
 
@@ -150,6 +187,8 @@ The application includes JWT-based authentication, authorization controls, reque
 
 The chat endpoints serve customers only. `SUPPORT_AGENT` and `ADMIN` users receive `403 Forbidden` from `/chat` and `/chat/resume`, and every agent operation runs for the authenticated customer's own `customer_id`.
 
+The document review endpoints (`/admin/documents/...`, see [Document reviews](#document-reviews)) are for `ADMIN` users only; any other role receives `403 Forbidden`.
+
 ### Logging and Observability
 
 Located in `src/app_logging/`.
@@ -197,6 +236,7 @@ Run all stages, or one stage, from the repository root:
 python -m scripts.evaluate_rag
 python -m scripts.evaluate_rag --stage ingestion --check-store
 python -m scripts.evaluate_rag --stage retrieval --top-k 4
+python -m scripts.evaluate_rag --stage retrieval --no-product-filter   # baseline without the product filter
 python -m scripts.evaluate_rag --check-store --output data/evaluation/rag/rag_report.json
 ```
 
@@ -216,10 +256,12 @@ Each stage prints its checks with thresholds, and the script exits with a non-ze
 | Vector search | pgvector |
 | Tool integration | Model Context Protocol (MCP) |
 | Authentication | JWT |
-| Testing | pytest, pytest-asyncio |
+| Testing | pytest, pytest-asyncio, pytest-cov |
+| Code quality | ruff, pip-audit |
 | Observability | Structured logging, LangSmith |
 | Containerization | Docker, Docker Compose |
-| CI | GitHub Actions |
+| CI | GitHub Actions, Azure Pipelines |
+| CD | GitHub Actions, GitHub Container Registry |
 
 ## Project Structure
 
@@ -227,11 +269,13 @@ Each stage prints its checks with thresholds, and the script exits with a non-ze
 aurelia-ai-support-agent/
 ├── .github/
 │   └── workflows/
+│       ├── cd.yml
 │       └── ci.yml
 ├── data/
 │   ├── documents/
 │   └── evaluation/
 ├── scripts/
+│   ├── evaluate_rag.py
 │   ├── ingest_documents.py
 │   ├── init_database.py
 │   ├── run_evaluation.py
@@ -256,11 +300,13 @@ aurelia-ai-support-agent/
 ├── .dockerignore
 ├── .env.example
 ├── .gitignore
+├── azure-pipelines.yml
 ├── Dockerfile
 ├── docker-compose.yaml
 ├── main.py
 ├── pytest.ini
 ├── requirements.txt
+├── ruff.toml
 └── README.md
 ```
 
@@ -303,6 +349,20 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
+`requirements.txt` is the only requirements file. It lists the project's direct dependencies, pinned, and pip resolves their transitive dependencies. It includes the test and lint tools (`pytest`, `pytest-asyncio`, `pytest-cov`, `httpx` for the FastAPI test client, `ruff`), so one install is enough to run the application and the test suite:
+
+```bash
+ruff check .
+python -m pytest tests/unit tests/evaluation
+```
+
+The dependency audit tool is not a project dependency. Install it separately when you need it, as CI does:
+
+```bash
+pip install pip-audit==2.10.1
+pip-audit -r requirements.txt
+```
+
 ## Environment Configuration
 
 Create a local `.env` file using `.env.example` as a template.
@@ -315,8 +375,8 @@ Configure the following variables:
 | `POSTGRES_PASSWORD` | PostgreSQL password used by Docker Compose |
 | `OPENAI_API_KEY` | API key for OpenAI model and embedding calls |
 | `OPENAI_MODEL` | OpenAI chat model; defaults to `gpt-4o-mini` |
-| `OPENAI_TIMEOUT_SECONDS` | Request timeout for OpenAI calls |
-| `OPENAI_MAX_RETRIES` | Maximum number of retries for OpenAI calls |
+| `OPENAI_TIMEOUT_SECONDS` | Request timeout for OpenAI chat and embedding calls; defaults to `30` |
+| `OPENAI_MAX_RETRIES` | Maximum number of retries, with exponential backoff, for OpenAI chat and embedding calls; defaults to `2` |
 | `RATE_LIMIT_REQUESTS` | Maximum number of requests allowed in the configured time window |
 | `RATE_LIMIT_WINDOW_SECONDS` | Rate-limiting window in seconds |
 | `JWT_SECRET_KEY` | Secret used for JWT signing |
@@ -349,6 +409,34 @@ Seed the database with the sample data:
 python -m scripts.seed_database
 ```
 
+### Demo users
+
+The seed script creates these users. **All of them have the same password: `AureliaDemo123!`** You can set a different one with the `AURELIA_DEMO_PASSWORD` environment variable before seeding. Re-running the seed script resets every demo user to that password.
+
+| Username | Password | Role | Customer |
+|---|---|---|---|
+| `alfa.support` | `AureliaDemo123!` | `CUSTOMER` | CUST-001, Alfa Manufacturing S.p.A. |
+| `beta.operations` | `AureliaDemo123!` | `CUSTOMER` | CUST-002, Beta Automation GmbH |
+| `gamma.manager` | `AureliaDemo123!` | `CUSTOMER` | CUST-003, Gamma Industries S.r.l. |
+| `delta.maintenance` | `AureliaDemo123!` | `CUSTOMER` | CUST-004, Delta Mechanics S.A. |
+| `nova.operator` | `AureliaDemo123!` | `CUSTOMER` | CUST-005, Nova Production Ltd. |
+| `mario.rossi` | `AureliaDemo123!` | `SUPPORT_AGENT` | — |
+| `lucia.bianchi` | `AureliaDemo123!` | `SUPPORT_AGENT` | — |
+| `admin.system` | `AureliaDemo123!` | `ADMIN` | — |
+
+What each role can do:
+- **Customers** can use `/chat` and `/chat/resume`.
+- **`admin.system`** can use the document review endpoints (`/admin/documents/...`).
+- **Support agents** can log in, but no endpoint is open to them yet.
+
+Get a token with:
+
+```bash
+curl -X POST http://localhost:8000/auth/login -H "Content-Type: application/json"      -d '{"username": "alfa.support", "password": "AureliaDemo123!"}'
+```
+
+These are development-only credentials for the sample data. Never seed them into a shared or production database.
+
 Ensure the database is available and that `DATABASE_URL` matches the database credentials and connection settings before starting the application.
 
 ## Document Ingestion
@@ -372,6 +460,40 @@ python -m scripts.ingest_documents
 
 Run this script to populate the vector store before testing workflows that rely on document retrieval.
 
+### Document owner metadata
+
+`data/documents/metadata.json` lets document owners manage each PDF without changing code:
+
+```json
+{
+  "warranty_policy.pdf": {"date": "2026-01-01", "valid": true, "reviewed_at": "2026-06-01"}
+}
+```
+
+- **`date`:** effective date (ISO `YYYY-MM-DD`). A test checks that it matches the "Effective Date" printed on the PDF's first page.
+- **`valid`:** set it to `false` to withdraw a document. Retrieval only searches chunks with `valid: true`.
+- **`reviewed_at`:** time of the last review (ISO date or timestamp; a plain date means midnight UTC), or `null` if the document was never reviewed. Normally set through the review API below.
+
+Ingestion stops on a malformed entry (wrong date format, unknown field) or on an entry for a file that does not exist. A PDF without an entry is ingested with `valid: true` and empty dates, with a warning. After editing the manifest, re-run `python -m scripts.ingest_documents`: metadata is stored with the chunks, and `python -m scripts.evaluate_rag --stage ingestion --check-store` reports a store whose text or metadata is out of date.
+
+### Document reviews
+
+Every valid document should be reviewed at least once a year. Two endpoints, restricted to `ADMIN` users, support this:
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /admin/documents/review-due?days=365` | Lists the valid documents whose last review is more than `days` days old (default 365). A document never reviewed counts from its effective `date`; one with neither date is always listed. Withdrawn documents (`valid: false`) are skipped. Most overdue first, each with its `document_id`. |
+| `POST /admin/documents/{document_id}/review` | Records a review now: sets `reviewed_at` to the current UTC time in `metadata.json`, then re-ingests **only that document** (its chunks are re-embedded and replace the old ones in the vector store). Returns the document and its new chunk count. Unknown id: `404`. |
+
+```bash
+curl -H "Authorization: Bearer $ADMIN_TOKEN" http://localhost:8000/admin/documents/review-due
+curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" http://localhost:8000/admin/documents/5d3ce3c9-21d8-580b-8705-a3bc8ca4e705/review
+```
+
+The manifest is written first, because it is the source of truth. If re-indexing then fails (database or OpenAI unavailable), the endpoint returns `503` saying the review was saved. Retry the review, or run `python -m scripts.ingest_documents`. The new chunks are stored before the old ones are deleted, so the document stays searchable throughout.
+
+With Docker Compose, `data/documents` is mounted into the `api` container so that recorded reviews survive a rebuild. On Linux, the container's `app` user must be able to write to that folder. Reviews are serialized within one API process. Running several API replicas would need shared storage for the manifest instead of a local file.
+
 ## Running the Application Locally
 
 Start the MCP server in a separate terminal:
@@ -391,6 +513,8 @@ uvicorn main:app --reload
 The API documentation is available at:
 
 [http://localhost:8000/docs](http://localhost:8000/docs)
+
+A liveness endpoint, used by the Docker Compose health check and the CI smoke test, is available at `http://localhost:8000/health` and returns `{"status": "ok"}`.
 
 The MCP client is configured for the local MCP endpoint:
 
@@ -456,21 +580,48 @@ python -m pytest tests/evaluation -v
 
 Integration and evaluation tests may require a configured database, initialized sample data, or other services depending on the individual test.
 
-## Continuous Integration
+Run the suites with a coverage report, as CI does:
 
-The GitHub Actions workflow in `.github/workflows/ci.yml` automates selected validation steps.
+```bash
+python -m pytest tests/unit tests/evaluation --cov=src --cov-report=term-missing
+```
 
-The workflow:
+`pytest.ini` adds the project root to the import path (`pythonpath = .`), so the plain `pytest` command works as well as `python -m pytest`.
 
-1. Checks out the repository.
-2. Sets up the Python environment and installs dependencies.
-3. Starts a PostgreSQL service with pgvector.
-4. Initializes and seeds the database.
-5. Starts the MCP server for the test environment.
-6. Executes the unit test suite.
-7. Builds the Docker image after the test job succeeds.
+## Continuous Integration and Delivery
 
-The Docker image is built as a CI validation step. The workflow does not publish the image to a container registry or deploy the application to a remote environment.
+The project follows Git Flow: `main` holds released code, `develop` collects finished work, and `feature/*`, `release/*` and `hotfix/*` branches are short-lived.
+
+### CI (`.github/workflows/ci.yml`)
+
+Runs on pull requests into `main` or `develop`, on pushes to `release/*` and `hotfix/*` branches, and inside the CD workflow. Its jobs run in parallel:
+
+| Job | What it checks |
+|---|---|
+| Lint | `ruff check` (configured in `ruff.toml`) |
+| Dependency audit | `pip-audit` on `requirements.txt`; fails on known vulnerabilities |
+| Run tests | Unit, evaluation and integration tests against PostgreSQL (pgvector) and the MCP server, with a coverage report (minimum 80%) in the job summary |
+| Build and smoke-test Docker image | Builds the image, starts it and waits for `GET /health` |
+
+### CD (`.github/workflows/cd.yml`)
+
+Runs on pushes to `develop` and `main` and on version tags (`v1.2.3`). It runs the full CI first and, only if it passes, publishes the image to GitHub Container Registry:
+
+| Trigger | Image tags |
+|---|---|
+| Push to `develop` | `develop`, `sha-<commit>` |
+| Push to `main` | `main`, `latest`, `sha-<commit>` |
+| Tag `v1.2.3` | `1.2.3`, `1.2`, `sha-<commit>` |
+
+```bash
+docker pull ghcr.io/<owner>/<repository>:latest
+```
+
+The same image runs the API and the MCP server. Deploying it to a server is not automated yet.
+
+### Azure DevOps (`azure-pipelines.yml`)
+
+The same CI as an Azure Pipeline: lint, dependency audit, tests and the Docker smoke test. It runs on pushes to `main`, `develop`, `release/*` and `hotfix/*`. Images are not published from Azure DevOps; the GitHub CD workflow publishes them to GitHub Container Registry. To run CI on pull requests, add the pipeline as a **Build validation** branch policy on `main` and `develop`.
 
 ## Project Goals
 

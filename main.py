@@ -5,10 +5,14 @@ from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 from src.api.routes.auth import router as auth_router
 from src.api.routes.chat import close_checkpointer, router as chat_router
+from src.api.routes.documents import router as documents_router
 from src.app_logging.logger import configure_logging, logger
-from src.services.exceptions import (ApplicationError, AuthorizationError, DatabaseError, ExternalServiceError, LLMError, ValidationError)
+from src.services.exceptions import (ApplicationError, AuthorizationError, DatabaseError, ExternalServiceError, LLMError, NotFoundError,
+                                     ValidationError)
 
 configure_logging()
+
+HEALTH_PATH = "/health"
 
 
 @asynccontextmanager
@@ -20,7 +24,7 @@ async def lifespan(_: FastAPI):
 app = FastAPI(
     title="Aurelia AI Support Agent",
     description="Enterprise AI support agent for Aurelia Industrial Systems.",
-    version="0.1.0",
+    version="1.0.0",
     lifespan=lifespan
 )
 
@@ -46,6 +50,16 @@ async def authorization_error_handler(request: Request, exc: AuthorizationError)
 
     return JSONResponse(
         status_code=status.HTTP_403_FORBIDDEN,
+        content={"detail": str(exc)}
+    )
+
+
+@app.exception_handler(NotFoundError)
+async def not_found_error_handler(request: Request, exc: NotFoundError) -> JSONResponse:
+    logger.warning("Resource not found", path=request.url.path, method=request.method, error=str(exc))
+
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND,
         content={"detail": str(exc)}
     )
 
@@ -105,6 +119,10 @@ async def rate_limit_middleware(request: Request, call_next):
     """Apply rate limiting to incoming HTTP requests."""
     client_host = request.client.host if request.client else "unknown"
 
+    # Container health probes must never be throttled, or a busy client could mark the service unhealthy.
+    if request.url.path == HEALTH_PATH:
+        return await call_next(request)
+
     if not app.state.rate_limiter.is_allowed(client_host):
         logger.warning("Rate limit exceeded", client=client_host, path=request.url.path, method=request.method)
 
@@ -118,7 +136,14 @@ async def rate_limit_middleware(request: Request, call_next):
     return await call_next(request)
 
 
+@app.get(HEALTH_PATH, include_in_schema=False)
+async def health() -> dict[str, str]:
+    """Liveness probe: the process is up and serving HTTP. It does not call the database or OpenAI."""
+    return {"status": "ok"}
+
+
 app.include_router(auth_router)
 app.include_router(chat_router)
+app.include_router(documents_router)
 
 logger.info("Aurelia AI Support Agent starting")
